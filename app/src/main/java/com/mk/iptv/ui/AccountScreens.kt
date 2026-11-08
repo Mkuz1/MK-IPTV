@@ -34,6 +34,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Bolt
@@ -263,14 +264,17 @@ fun ProfileEditorScreen(profileId: String?) {
 /* ---------------- Playlists tab ---------------- */
 
 @Composable
-fun PlaylistsScreen(session: Session) {
+fun PlaylistsScreen() {
+    val session = rememberSession()
     val actions = LocalActions.current
     val scope = rememberCoroutineScope()
     var confirmDelete by remember { mutableStateOf<Playlist?>(null) }
     AmbientBackground {
-        LazyVerticalGrid(GridCells.Adaptive(380.dp), Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 120.dp)) {
+        LazyVerticalGrid(GridCells.Adaptive(380.dp), Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
             item(span = { GridItemSpan(maxLineSpan) }) {
-                Row(Modifier.statusBarsPadding().padding(start = 20.dp, end = 16.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.statusBarsPadding().padding(start = 16.dp, end = 16.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    GlassIconButton(Icons.AutoMirrored.Rounded.ArrowBack, { actions.back() }, blur = false, contentDescription = "Back")
+                    Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text("Playlists", style = TitleStyle, fontSize = 30.sp)
                         Text("Xtream Codes accounts on this device", color = Mk.Sub, fontSize = 13.sp)

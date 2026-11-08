@@ -253,7 +253,8 @@ private fun DownloadedEpisodeRow(e: DownloadEntry, fallback: String?, onPlay: ()
             if (e.completed) Box(Modifier.align(Alignment.Center).size(32.dp).glass(CircleShape).background(Color.Black.copy(alpha = .25f), CircleShape), contentAlignment = Alignment.Center) {
                 Icon(Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(18.dp))
             }
-            progress?.let { p -> if (p.fraction > 0) Box(Modifier.align(Alignment.BottomCenter).padding(horizontal = 6.dp, vertical = 5.dp)) { ProgressLine(p.fraction, height = 3.dp) } }
+            if (progress?.finished == true) WatchedBadge(Modifier.align(Alignment.TopStart).padding(5.dp))
+            else progress?.let { p -> if (p.fraction > 0) Box(Modifier.align(Alignment.BottomCenter).padding(horizontal = 6.dp, vertical = 5.dp)) { ProgressLine(p.fraction, height = 3.dp) } }
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f).tap(onPlay)) {

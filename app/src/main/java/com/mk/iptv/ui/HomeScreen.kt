@@ -3,6 +3,7 @@ package com.mk.iptv.ui
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,6 +31,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.LiveTv
@@ -78,8 +80,8 @@ enum class Tab(val label: String, val icon: androidx.compose.ui.graphics.vector.
     LIVE("Live TV", Icons.Rounded.LiveTv),
     MOVIES("Movies", Icons.Rounded.Movie),
     SERIES("Series", Icons.Rounded.VideoLibrary),
+    FAVORITES("Favorites", Icons.Rounded.Favorite),
     DOWNLOADS("Downloads", Icons.Rounded.Download),
-    PLAYLISTS("Playlists", Icons.AutoMirrored.Rounded.PlaylistPlay),
 }
 
 @Composable
@@ -101,7 +103,7 @@ fun HomeScreen() {
                     Tab.MOVIES -> CatalogGate(catalogState, session) { VodHome(true, it, session) { t -> preview = t } }
                     Tab.SERIES -> CatalogGate(catalogState, session) { VodHome(false, it, session) { t -> preview = t } }
                     Tab.DOWNLOADS -> DownloadsScreen(session)
-                    Tab.PLAYLISTS -> PlaylistsScreen(session)
+                    Tab.FAVORITES -> CatalogGate(catalogState, session) { FavoritesScreen(it, session) { t -> preview = t } }
                 }
             }
         }
@@ -216,12 +218,8 @@ fun VodHome(movies: Boolean, catalog: Catalog, session: Session, onPreview: (Pre
         shelves.firstOrNull { it.catId == "recent" }?.items?.firstOrNull { (it as? VodItem)?.poster != null || (it as? SeriesItem)?.cover != null }
             ?: shelves.firstOrNull()?.items?.firstOrNull()
     }
-    val continueItems = remember(session.data, session.profileId, movies) {
-        session.data.progress[session.profileId].orEmpty().values
-            .filter { it.kind == (if (movies) "movie" else "episode") && !it.finished && it.position > 15_000 && it.playlistId == session.playlist?.id }
-            .sortedByDescending { it.updatedAt }
-            .let { list -> if (movies) list else list.distinctBy { it.seriesId } }
-            .take(20)
+    val continueItems = remember(session.data, session.profileId, movies, session.playlist?.id) {
+        continueWatching(session, movies)
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -233,7 +231,7 @@ fun VodHome(movies: Boolean, catalog: Catalog, session: Session, onPreview: (Pre
                 Column {
                     SectionTitle("Continue Watching")
                     LazyRow(contentPadding = PaddingValues(horizontal = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        items(continueItems, key = { it.key }) { p -> ContinueCard(p) { resume(ctx, p, session, scope) } }
+                        items(continueItems, key = { it.key }) { p -> ContinueCard(p, session) { resume(ctx, p, session, scope, actions) } }
                     }
                 }
             }
@@ -285,7 +283,23 @@ fun VodHome(movies: Boolean, catalog: Catalog, session: Session, onPreview: (Pre
     }
 }
 
-private fun resume(ctx: android.content.Context, p: Progress, session: Session, scope: kotlinx.coroutines.CoroutineScope) {
+/** Movies in progress, and for each series the latest episode (or "Up next" once it's finished). */
+fun continueWatching(session: Session, movies: Boolean): List<Progress> {
+    val all = session.data.progress[session.profileId].orEmpty().values.filter { it.playlistId == session.playlist?.id }
+    val dismissed = session.data.dismissed[session.profileId].orEmpty()
+    return if (movies) {
+        all.filter { it.kind == "movie" && !it.finished && it.position > 10_000 && it.updatedAt > (dismissed["vod:${it.itemId}"] ?: 0) }
+            .sortedByDescending { it.updatedAt }.take(20)
+    } else {
+        all.filter { it.kind == "episode" && it.seriesId != null }
+            .groupBy { it.seriesId }
+            .mapNotNull { (_, eps) -> eps.maxByOrNull { it.updatedAt } }
+            .filter { (it.finished || it.position > 10_000) && it.updatedAt > (dismissed["series:${it.seriesId}"] ?: 0) }
+            .sortedByDescending { it.updatedAt }.take(20)
+    }
+}
+
+private fun resume(ctx: android.content.Context, p: Progress, session: Session, scope: kotlinx.coroutines.CoroutineScope, actions: Actions) {
     val pl = session.data.playlists.firstOrNull { it.id == p.playlistId } ?: session.playlist ?: return
     val catalog = MkApp.graph.catalog.current
     if (p.kind == "movie") {
@@ -296,7 +310,11 @@ private fun resume(ctx: android.content.Context, p: Progress, session: Session, 
         scope.launch {
             val info = MkApp.graph.catalog.seriesInfo(sid, pl.id) ?: return@launch toast(ctx, "Couldn't load episodes")
             val items = Playback.episodeItems(pl, catalog?.seriesById?.get(sid), sid, info)
-            Playback.launch(ctx, PlayQueue(items, items.indexOfFirst { it.key == p.key }.coerceAtLeast(0)))
+            val idx = items.indexOfFirst { it.key == p.key }.coerceAtLeast(0)
+            val start = if (p.finished) idx + 1 else idx
+            if (start > items.lastIndex) { toast(ctx, "You've watched every episode"); actions.series(sid); return@launch }
+            // Player resumes the episode at its exact saved position.
+            Playback.launch(ctx, PlayQueue(items, start))
         }
     }
 }
@@ -376,21 +394,49 @@ private fun RankedPoster(rank: Int, item: Any, onPreview: (PreviewTarget) -> Uni
 }
 
 @Composable
-private fun ContinueCard(p: Progress, onClick: () -> Unit) {
-    Column(Modifier.width(176.dp).tap(onClick)) {
+private fun ContinueCard(p: Progress, session: Session, onClick: () -> Unit) {
+    var menu by remember { mutableStateOf(false) }
+    val upNext = p.kind == "episode" && p.finished
+    Column(
+        Modifier.width(176.dp).clip(RoundedCornerShape(14.dp))
+            .combinedClickable(onClick = onClick, onLongClick = { menu = true })
+    ) {
         Box(Modifier.fillMaxWidth().height(99.dp)) {
-            Poster(p.image, p.title, Modifier.fillMaxSize())
+            Poster(p.image, p.title, Modifier.fillMaxSize(), contentDescription = "Resume ${p.title}")
             Box(
                 Modifier.align(Alignment.BottomStart).padding(8.dp).size(36.dp).glass(RoundedCornerShape(50)).background(Color.Black.copy(alpha = .2f), RoundedCornerShape(50)),
                 contentAlignment = Alignment.Center,
             ) { Icon(Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(20.dp)) }
+            if (upNext) {
+                Text(
+                    "UP NEXT", color = Color.Black, fontSize = 9.sp, fontWeight = FontWeight.Black,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).clip(RoundedCornerShape(6.dp)).background(Mk.Accent).padding(horizontal = 6.dp, vertical = 2.dp),
+                )
+            }
+            androidx.compose.material3.DropdownMenu(menu, { menu = false }, modifier = Modifier.background(Mk.SheetBg)) {
+                androidx.compose.material3.DropdownMenuItem(
+                    { Text("Remove from Continue Watching", color = Mk.Text) },
+                    onClick = {
+                        menu = false
+                        MkApp.graph.store.dismissContinue(session.profileId, if (p.kind == "movie") "vod:${p.itemId}" else "series:${p.seriesId}")
+                    },
+                )
+                if (!p.finished) androidx.compose.material3.DropdownMenuItem(
+                    { Text("Mark as watched", color = Mk.Text) },
+                    onClick = { menu = false; MkApp.graph.store.setWatched(session.profileId, listOf(p), true) },
+                )
+            }
         }
         Spacer(Modifier.height(8.dp))
-        ProgressLine(p.fraction)
+        ProgressLine(if (upNext) 0f else p.fraction)
         Spacer(Modifier.height(6.dp))
         val left = ((p.duration - p.position) / 60_000).coerceAtLeast(1)
         Text(
-            p.subtitle?.let { "${p.title} · ${it.substringBefore(" ·")}" } ?: "${p.title} · ${left}m left",
+            when {
+                upNext -> "${p.title} · Up next"
+                p.subtitle != null -> "${p.title} · ${p.subtitle.substringBefore(" ·")} · ${left}m left"
+                else -> "${p.title} · ${left}m left"
+            },
             color = Mk.Sub, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
     }

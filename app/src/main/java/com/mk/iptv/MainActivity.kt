@@ -22,6 +22,7 @@ import com.mk.iptv.ui.HomeScreen
 import com.mk.iptv.ui.LocalActions
 import com.mk.iptv.ui.MkTheme
 import com.mk.iptv.ui.PlaylistEditorScreen
+import com.mk.iptv.ui.PlaylistsScreen
 import com.mk.iptv.ui.ProfileEditorScreen
 import com.mk.iptv.ui.ProfilesScreen
 import com.mk.iptv.ui.SearchScreen
@@ -60,6 +61,7 @@ class MainActivity : AppCompatActivity() {
                         composable("profiles") { ProfilesScreen() }
                         composable("home") { HomeScreen() }
                         composable("search") { SearchScreen() }
+                        composable("playlists") { PlaylistsScreen() }
                         composable("series/{id}", listOf(navArgument("id") { type = NavType.IntType })) {
                             SeriesDetailScreen(it.arguments?.getInt("id") ?: 0)
                         }
@@ -81,6 +83,11 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        MkApp.graph.store.flushBlocking()
     }
 
     private fun dec(s: String?) = URLDecoder.decode(s.orEmpty(), "UTF-8")

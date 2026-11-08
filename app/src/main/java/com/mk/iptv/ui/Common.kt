@@ -104,6 +104,7 @@ class Actions(private val nav: NavController) {
     fun series(id: Int) = nav.navigate("series/$id")
     fun category(type: String, id: String, title: String) = nav.navigate("category/$type/${enc(id)}/${enc(title)}")
     fun search() = nav.navigate("search")
+    fun playlists() = nav.navigate("playlists")
     fun downloadGroup(key: String) = nav.navigate("downloads/${enc(key)}")
     fun playlistEditor(id: String? = null) = nav.navigate("playlist?id=${id ?: ""}")
     fun profileEditor(id: String? = null) = nav.navigate("profile?id=${id ?: ""}")
@@ -120,7 +121,7 @@ fun titleBrush(title: String): Brush {
 }
 
 @Composable
-fun Poster(url: String?, title: String, modifier: Modifier = Modifier, corner: Dp = 14.dp, contentScale: ContentScale = ContentScale.Crop) {
+fun Poster(url: String?, title: String, modifier: Modifier = Modifier, corner: Dp = 14.dp, contentScale: ContentScale = ContentScale.Crop, contentDescription: String = title) {
     var failed by remember(url) { mutableStateOf(url.isNullOrBlank()) }
     Box(
         modifier
@@ -138,7 +139,7 @@ fun Poster(url: String?, title: String, modifier: Modifier = Modifier, corner: D
         }
         if (!url.isNullOrBlank()) {
             AsyncImage(
-                model = url, contentDescription = title, contentScale = contentScale,
+                model = url, contentDescription = contentDescription, contentScale = contentScale,
                 onError = { failed = true }, onSuccess = { failed = false },
                 modifier = Modifier.fillMaxSize(),
             )
@@ -149,11 +150,11 @@ fun Poster(url: String?, title: String, modifier: Modifier = Modifier, corner: D
 /* ---------------- Header ---------------- */
 
 @Composable
-fun TabHeader(title: String, session: Session, modifier: Modifier = Modifier, showSearch: Boolean = true) {
+fun TabHeader(title: String, session: Session, modifier: Modifier = Modifier, showSearch: Boolean = true, hPad: Dp = 16.dp) {
     val actions = LocalActions.current
     var menu by remember { mutableStateOf(false) }
     Row(
-        modifier.fillMaxWidth().statusBarsPadding().padding(start = 16.dp, end = 16.dp, top = 8.dp),
+        modifier.fillMaxWidth().statusBarsPadding().padding(start = hPad, end = hPad, top = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         session.profile?.let { p ->
@@ -181,7 +182,7 @@ fun TabHeader(title: String, session: Session, modifier: Modifier = Modifier, sh
                             },
                         )
                     }
-                    DropdownMenuItem(text = { Text("Manage playlists…", color = Mk.Sub) }, onClick = { menu = false; actions.playlistEditor(null) })
+                    DropdownMenuItem(text = { Text("Manage playlists…", color = Mk.Sub) }, onClick = { menu = false; actions.playlists() })
                 }
             }
             Spacer(Modifier.width(8.dp))

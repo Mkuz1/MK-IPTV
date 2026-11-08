@@ -5,10 +5,12 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
+import androidx.compose.ui.test.swipeDown
 import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso
 import com.github.takahirom.roborazzi.captureScreenRoboImage
@@ -69,8 +71,18 @@ class AppFlowScreenshotTest {
                     Profile("guest", "Guest", 3, playlistIds = listOf("backup")),
                 ),
                 lastProfileId = "mk",
+                favorites = mapOf("mk" to listOf("vod:501", "series:71", "vod:506", "live:101", "live:104", "series:73")),
             )
         }
+        // Watch history: a movie half watched, Overcast E1 watched + E2 in progress, Lantern Society E1 finished (-> Up next).
+        val now = System.currentTimeMillis()
+        fun pr(key: String, pos: Long, dur: Long, ago: Long, kind: String, title: String, img: String, sid: Int? = null, sub: String? = null) =
+            com.mk.iptv.data.Progress(key, pos, dur, now - ago, title, server.url("/img/$img.jpg").toString(), kind, sid, sub, key.substringAfter(':'), "mp4", "home")
+        graph.store.saveProgress("mk", pr("vod:501", 4_200_000, 7_080_000, 60_000, "movie", "The Last Orchard", "orchard_wide"))
+        graph.store.saveProgress("mk", pr("vod:503", 1_100_000, 6_500_000, 90_000, "movie", "Ember Protocol", "ember_wide"))
+        graph.store.saveProgress("mk", pr("ep:1101", 2_640_000, 2_640_000, 300_000, "episode", "Overcast", "overcast_wide", 71, "S1:E1 · The Low Front"))
+        graph.store.saveProgress("mk", pr("ep:1102", 1_150_000, 2_820_000, 30_000, "episode", "Overcast", "salt_wide", 71, "S1:E2 · Pressure"))
+        graph.store.saveProgress("mk", pr("ep:0101", 2_640_000, 2_640_000, 120_000, "episode", "The Lantern Society", "lantern_wide", 70, "S1:E1 · The Low Front"))
     }
 
     @After fun tearDown() { server.shutdown() }
@@ -117,7 +129,7 @@ class AppFlowScreenshotTest {
         settle(14000)
         shot("02-movies")
 
-        compose.onRoot().performTouchInput { swipeUp(startY = bottom * .85f, endY = bottom * .2f) }
+        compose.onRoot().performTouchInput { swipeUp(startY = bottom * .8f, endY = bottom * .35f, durationMillis = 900) }
         settle(2500)
         shot("03-movies-rows")
 
@@ -130,6 +142,9 @@ class AppFlowScreenshotTest {
         click("Series")
         settle(12000)
         shot("05-series")
+        compose.onRoot().performTouchInput { swipeUp(startY = bottom * .8f, endY = bottom * .35f, durationMillis = 900) }
+        settle(3000)
+        shot("05b-series-continue")
 
         clickDesc("Overcast")
         settle(1500)
@@ -141,7 +156,7 @@ class AppFlowScreenshotTest {
         val pl = graph.store.playlist("home")!!
         val dl = graph.downloads
         val overcast = graph.catalog.current!!.series.first { it.name == "Overcast" }
-        listOf("71101" to 1, "71102" to 2, "71103" to 3, "71201" to 1).forEachIndexed { i, (epId, n) ->
+        listOf("1101" to 1, "1102" to 2, "1103" to 3, "1201" to 1).forEachIndexed { i, (epId, n) ->
             val s = if (i < 3) 1 else 2
             val id = DownloadsRepository.episodeId("home", epId)
             dl.manager.addDownload(dl.requestFor(id, DownloadMeta("episode", "home", listOf("The Low Front", "Pressure", "The Drowned Bell", "The Low Front")[i], "${server.url("/img/")}${listOf("overcast", "salt", "north", "overcast")[i]}_wide.jpg", null, overcast.id, "Overcast", overcast.cover, s, n, url = DownloadsRepository.episodeUrl("home", epId, "mp4"))))
@@ -190,7 +205,14 @@ class AppFlowScreenshotTest {
         settle(6000)
         shot("10-live-tv")
 
-        click("Playlists")
+        compose.onAllNodesWithText("Favorites").onLast().performClick() // the tab (drawn last), not the Live TV chip
+        settle(4000)
+        shot("15-favorites")
+
+        // Playlists moved out of the tab bar: header playlist button -> Manage playlists…
+        click("Home Server")
+        settle(600)
+        click("Manage playlists…")
         settle(1500)
         shot("11-playlists")
 
@@ -231,8 +253,11 @@ class AppFlowScreenshotTest {
         val pl = graph.store.playlist("home")!!
         val vod = graph.catalog.current!!.vod.first()
         val ctx = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        // Saved position from a previous session must be restored exactly.
+        graph.store.saveProgress("mk", com.mk.iptv.data.Progress("vod:${vod.id}", 4_360_000, 7_440_000, System.currentTimeMillis(), vod.name, kind = "movie", itemId = vod.id.toString(), playlistId = "home"))
         val intent = PlayerActivity.intent(ctx, PlayQueue(listOf(Playback.movieItem(pl, vod), Playback.movieItem(pl, graph.catalog.current!!.vod[2])), 0))
         val scenario = ActivityScenario.launch<PlayerActivity>(intent)
+        scenario.onActivity { a -> assertEquals(4_360_000L, a.exo.currentPosition) }
         settle(1200)
         scenario.onActivity { a -> a.error.value = null; a.buffering.value = false; a.duration.longValue = 7_440_000; a.position.longValue = 4_360_000 }
         settle(600)

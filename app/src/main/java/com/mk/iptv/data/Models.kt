@@ -52,7 +52,8 @@ data class Progress(
     val playlistId: String = "",
 ) {
     val fraction: Float get() = if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f
-    val finished: Boolean get() = duration > 0 && position > duration * 0.95
+    /** Watched: reached the credits (last 7%, or the final 2 minutes of anything longer than 20 minutes). */
+    val finished: Boolean get() = duration > 0 && (position >= duration * 0.93 || (duration > 1_200_000 && duration - position <= 120_000))
 }
 
 @Serializable
@@ -64,6 +65,8 @@ data class AppData(
     val favorites: Map<String, List<String>> = emptyMap(),
     /** profileId -> (key -> progress) */
     val progress: Map<String, Map<String, Progress>> = emptyMap(),
+    /** profileId -> ("vod:id" / "series:id" -> time it was removed from Continue Watching) */
+    val dismissed: Map<String, Map<String, Long>> = emptyMap(),
 )
 
 /* ---------------- Catalog (from Xtream) ---------------- */

@@ -1,6 +1,7 @@
 package com.mk.iptv.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,7 +22,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.CloudOff
+import androidx.compose.material.icons.rounded.Replay
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
@@ -52,6 +56,7 @@ import com.mk.iptv.MkApp
 import com.mk.iptv.cast.CastRouteButton
 import com.mk.iptv.data.Episode
 import com.mk.iptv.data.PlayQueue
+import com.mk.iptv.data.Progress
 import com.mk.iptv.data.SeriesInfo
 import com.mk.iptv.download.DownloadsRepository
 
@@ -172,11 +177,32 @@ fun SeriesDetailScreen(seriesId: Int) {
                     }
                 }
                 val eps = info!!.episodes[season].orEmpty()
+                item {
+                    val keys = eps.map { "ep:${it.id}" }
+                    val watchedCount = keys.count { progressMap[it]?.finished == true }
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("$watchedCount of ${eps.size} watched", color = Mk.Sub, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                        val allWatched = watchedCount == eps.size && eps.isNotEmpty()
+                        Text(
+                            if (allWatched) "Mark season unwatched" else "Mark season watched",
+                            color = Mk.Accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.tap {
+                                val entries = allItems.filter { it.key in keys }.map { progressFor(it, progressMap[it.key]) }
+                                MkApp.graph.store.setWatched(session.profileId, entries, !allWatched)
+                            },
+                        )
+                    }
+                }
                 items(eps, key = { it.id }) { ep ->
                     val key = "ep:${ep.id}"
                     EpisodeRow(
                         ep = ep, fallback = cover ?: backdrop, seriesTitle = title,
-                        progress = progressMap[key]?.fraction,
+                        progress = progressMap[key],
+                        onToggleWatched = { watched ->
+                            allItems.firstOrNull { it.key == key }?.let { pi ->
+                                MkApp.graph.store.setWatched(session.profileId, listOf(progressFor(pi, progressMap[key])), watched)
+                            }
+                        },
                         downloadId = pl?.let { DownloadsRepository.episodeId(it.id, ep.id) },
                         downloaded = pl?.let { p -> downloads.any { it.id == DownloadsRepository.episodeId(p.id, ep.id) && it.completed } } == true,
                         onPlay = { Playback.launch(ctx, PlayQueue(allItems, allItems.indexOfFirst { it.key == key }.coerceAtLeast(0))) },
@@ -203,36 +229,87 @@ fun SeriesDetailScreen(seriesId: Int) {
     }
 }
 
+/** Builds a progress record for marking an episode watched/unwatched from the episode list. */
+fun progressFor(pi: com.mk.iptv.data.PlayItem, existing: Progress?): Progress = Progress(
+    key = pi.key, position = existing?.position ?: 0, duration = existing?.duration ?: 0, updatedAt = System.currentTimeMillis(),
+    title = pi.title, image = pi.image, kind = pi.kind, seriesId = pi.seriesId, subtitle = pi.subtitle,
+    itemId = pi.itemId, ext = pi.ext, playlistId = pi.playlistId,
+)
+
+/** Green "watched" badge drawn on top of a thumbnail. */
+@Composable
+fun WatchedBadge(modifier: Modifier = Modifier) {
+    Row(
+        modifier.clip(RoundedCornerShape(7.dp)).background(Mk.Green).padding(horizontal = 6.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Rounded.Check, null, tint = Color.Black, modifier = Modifier.size(11.dp))
+        Spacer(Modifier.width(3.dp))
+        Text("WATCHED", color = Color.Black, fontSize = 8.sp, fontWeight = FontWeight.Black)
+    }
+}
+
 @Composable
 fun EpisodeRow(
     ep: Episode,
     fallback: String?,
     seriesTitle: String,
-    progress: Float?,
+    progress: Progress?,
     downloadId: String?,
     downloaded: Boolean,
     onPlay: () -> Unit,
     onDownload: () -> Unit,
+    onToggleWatched: (Boolean) -> Unit,
 ) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp), verticalAlignment = Alignment.Top) {
-        Box(Modifier.size(132.dp, 74.dp).tap(onPlay)) {
+    val watched = progress?.finished == true
+    var menu by remember { mutableStateOf(false) }
+    Row(
+        Modifier.fillMaxWidth().combinedClickable(onClick = onPlay, onLongClick = { menu = true }).padding(horizontal = 18.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(Modifier.size(132.dp, 74.dp)) {
             Poster(ep.image ?: fallback, seriesTitle, Modifier.fillMaxSize(), corner = 12.dp)
+            if (watched) Box(Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)).background(Color.Black.copy(alpha = .35f)))
             Box(Modifier.align(Alignment.Center).size(32.dp).glass(CircleShape).background(Color.Black.copy(alpha = .25f), CircleShape), contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                Icon(if (watched) Icons.Rounded.Replay else Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(18.dp))
             }
-            if (progress != null && progress > 0f) {
-                Box(Modifier.align(Alignment.BottomCenter).padding(horizontal = 6.dp, vertical = 5.dp)) { ProgressLine(progress, height = 3.dp) }
+            if (watched) WatchedBadge(Modifier.align(Alignment.TopStart).padding(5.dp))
+            else if (progress != null && progress.fraction > 0f) {
+                Box(Modifier.align(Alignment.BottomCenter).padding(horizontal = 6.dp, vertical = 5.dp)) { ProgressLine(progress.fraction, height = 3.dp) }
             }
             if (downloaded) {
-                Box(Modifier.align(Alignment.TopEnd).padding(5.dp).clip(RoundedCornerShape(6.dp)).background(Mk.Green.copy(alpha = .9f)).padding(horizontal = 5.dp, vertical = 1.dp)) {
+                Box(Modifier.align(Alignment.TopEnd).padding(5.dp).clip(RoundedCornerShape(6.dp)).background(Mk.Accent.copy(alpha = .95f)).padding(horizontal = 5.dp, vertical = 1.dp)) {
                     Text("OFFLINE", color = Color.Black, fontSize = 8.sp, fontWeight = FontWeight.Black)
                 }
             }
+            androidx.compose.material3.DropdownMenu(menu, { menu = false }, modifier = Modifier.background(Mk.SheetBg)) {
+                androidx.compose.material3.DropdownMenuItem(
+                    { Text(if (watched) "Mark as unwatched" else "Mark as watched", color = Mk.Text) },
+                    leadingIcon = { Icon(if (watched) Icons.Rounded.Replay else Icons.Rounded.Check, null, tint = Mk.Text) },
+                    onClick = { menu = false; onToggleWatched(!watched) },
+                )
+            }
         }
         Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f).tap(onPlay)) {
-            Text("${ep.num}. ${ep.title.ifBlank { "Episode ${ep.num}" }}", color = Mk.Text, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            ep.duration?.let { Text(it, color = Mk.Sub, fontSize = 12.sp) }
+        Column(Modifier.weight(1f)) {
+            Text(
+                "${ep.num}. ${ep.title.ifBlank { "Episode ${ep.num}" }}",
+                color = if (watched) Mk.Text.copy(alpha = .75f) else Mk.Text, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ep.duration?.let { Text(it, color = Mk.Sub, fontSize = 12.sp) }
+                when {
+                    watched -> {
+                        Spacer(Modifier.width(8.dp))
+                        Icon(Icons.Rounded.CheckCircle, null, tint = Mk.Green, modifier = Modifier.size(13.dp))
+                        Text(" Watched", color = Mk.Green, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    progress != null && progress.position > 10_000 -> {
+                        Spacer(Modifier.width(8.dp))
+                        Text("${((progress.duration - progress.position) / 60_000).coerceAtLeast(1)}m left", color = Mk.Accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
             ep.plot?.takeIf { it.isNotBlank() }?.let {
                 Spacer(Modifier.height(3.dp))
                 Text(it, color = Mk.Sub, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)

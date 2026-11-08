@@ -6,6 +6,10 @@ An Android IPTV player for **Xtream Codes** playlists with a Netflix-style brows
 
 - **Multiple Xtream playlists**: add as many accounts as you like (server URL, username, password). Shows account status, expiry date, connections and channel/movie/series counts. Passwords are encrypted with the Android Keystore.
 - **Profiles ("Who's watching?")**: each profile has its own favorites (My List), watch history and Continue Watching. A profile can be limited to certain playlists. Kids profiles always hide adult categories.
+- **Tabs**: Live TV · Movies · Series · Favorites · Downloads. Playlists are managed from the playlist button in every header ("Manage playlists…").
+- **Continue Watching** (Movies and Series tabs): resumes exactly where you stopped, even after the app is closed, killed or the phone restarts. Progress is saved every 3 seconds and on every pause, seek and exit, using durable (fsync'd, atomic) writes. Series show the latest episode, or **Up next** once it's finished. Long-press a card to remove it or mark it watched.
+- **Watched marks**: finished episodes (credits reached) show a green **WATCHED** badge, and partly watched ones show a progress bar with the time left. Long-press an episode to mark it watched or unwatched, or use "Mark season watched".
+- **Favorites**: one place for your My List movies and series and your favorite live channels.
 - **Movies & Series tabs**: a hero banner plus Netflix-style rows (Continue Watching, My List, Recently Added, Top Rated / Top 10, every genre). Tapping a title opens a glass **quick preview** with the poster, year, runtime, age rating, rating, genre, description, cast and director, plus Play / Trailer / My List / Download.
 - **Series detail**: seasons, episodes with thumbnails and summaries, resume where you left off, auto-play of the next episode.
 - **Live TV**: inline live preview, categories and favorites, now/next TV guide with progress bars, channel up/down in the player.

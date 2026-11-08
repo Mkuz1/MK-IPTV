@@ -23,17 +23,31 @@ class LocalStore(dir: File) {
     private val _data = MutableStateFlow(load())
     val data: StateFlow<AppData> = _data.asStateFlow()
 
+    private val writeLock = Any()
+    @Volatile private var lastWritten: AppData? = null
+
     init {
         scope.launch {
-            for (d in saves) {
-                runCatching {
-                    val tmp = File(file.parentFile, "state.json.tmp")
-                    tmp.writeText(json.encodeToString(AppData.serializer(), d))
-                    tmp.renameTo(file)
-                }
-            }
+            for (d in saves) write(d)
         }
     }
+
+    /** Atomic, durable write: temp file + fsync + rename, so a crash or kill never corrupts or loses state. */
+    private fun write(d: AppData) = synchronized(writeLock) {
+        if (d === lastWritten) return@synchronized
+        runCatching {
+            val tmp = File(file.parentFile, "state.json.tmp")
+            java.io.FileOutputStream(tmp).use { out ->
+                out.write(json.encodeToString(AppData.serializer(), d).toByteArray())
+                out.fd.sync()
+            }
+            if (!tmp.renameTo(file)) { file.delete(); tmp.renameTo(file) }
+            lastWritten = d
+        }
+    }
+
+    /** Writes the current state to disk right now (used by the player on pause/stop/exit). */
+    fun flushBlocking() = write(_data.value)
 
     private fun load(): AppData = runCatching {
         if (file.exists()) json.decodeFromString(AppData.serializer(), file.readText()) else AppData()
@@ -104,6 +118,29 @@ class LocalStore(dir: File) {
     }
 
     fun progress(profileId: String, key: String) = data.value.progress[profileId]?.get(key)
+
+    fun dismissContinue(profileId: String, key: String) = update { d ->
+        d.copy(dismissed = d.dismissed + (profileId to (d.dismissed[profileId].orEmpty() + (key to System.currentTimeMillis()))))
+    }
+
+    fun removeProgress(profileId: String, keys: Collection<String>) = update { d ->
+        d.copy(progress = d.progress + (profileId to d.progress[profileId].orEmpty().filterKeys { it !in keys }))
+    }
+
+    /** Marks items watched (position = duration) or unwatched (progress removed). */
+    fun setWatched(profileId: String, entries: List<Progress>, watched: Boolean) {
+        if (!watched) return removeProgress(profileId, entries.map { it.key })
+        update { d ->
+            val cur = d.progress[profileId].orEmpty().toMutableMap()
+            val now = System.currentTimeMillis()
+            entries.forEachIndexed { i, p ->
+                val dur = p.duration.takeIf { it > 0 } ?: cur[p.key]?.duration?.takeIf { it > 0 } ?: 1L
+                // older timestamps for earlier items so "last watched" points to the latest one
+                cur[p.key] = p.copy(position = dur, duration = dur, updatedAt = now - (entries.size - i))
+            }
+            d.copy(progress = d.progress + (profileId to cur))
+        }
+    }
 
     companion object {
         fun newId() = UUID.randomUUID().toString().substring(0, 8)

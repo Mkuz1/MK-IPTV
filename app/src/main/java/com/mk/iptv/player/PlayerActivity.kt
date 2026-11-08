@@ -167,7 +167,7 @@ class PlayerActivity : AppCompatActivity() {
                     duration.longValue = p.duration.takeIf { it != C.TIME_UNSET } ?: 0
                     bufferedPos.longValue = p.bufferedPosition
                 }
-                if (++tick % 10 == 0) saveProgress()
+                if (++tick % 6 == 0) saveProgress() // every 3 s while playing
                 delay(500)
             }
         }
@@ -235,7 +235,13 @@ class PlayerActivity : AppCompatActivity() {
     fun retry() = load(index.intValue, resume = true)
 
     private val listener = object : Player.Listener {
-        override fun onIsPlayingChanged(playing: Boolean) { isPlaying.value = playing }
+        override fun onIsPlayingChanged(playing: Boolean) {
+            isPlaying.value = playing
+            if (!playing) saveProgress()
+        }
+        override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
+            if (reason == Player.DISCONTINUITY_REASON_SEEK) saveProgress()
+        }
         override fun onPlaybackStateChanged(state: Int) {
             buffering.value = state == Player.STATE_BUFFERING
             if (state == Player.STATE_READY) { error.value = null; refreshTracks() }
@@ -466,9 +472,17 @@ class PlayerActivity : AppCompatActivity() {
         }
     }
 
+    override fun onPause() {
+        super.onPause()
+        // Persist immediately: after onPause the process may be killed at any time.
+        saveProgress()
+        graph.store.flushBlocking()
+    }
+
     override fun onStop() {
         super.onStop()
         saveProgress()
+        graph.store.flushBlocking()
         // keep playing while casting / AirPlaying; pause local playback otherwise (unless in PiP)
         if (!casting.value && airplay.value == null && !(Build.VERSION.SDK_INT >= 24 && isInPictureInPictureMode)) exo.pause()
         if (Build.VERSION.SDK_INT >= 24 && isInPictureInPictureMode.not() && isFinishing) exo.stop()
@@ -477,6 +491,7 @@ class PlayerActivity : AppCompatActivity() {
     override fun onDestroy() {
         if (::exo.isInitialized) {
             saveProgress()
+            graph.store.flushBlocking()
             exo.removeListener(listener)
             exo.release()
         }
