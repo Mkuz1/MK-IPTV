@@ -8,6 +8,8 @@ import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
@@ -114,13 +116,53 @@ class AppFlowScreenshotTest {
     private var prefix = ""
     private fun shot(name: String) = captureScreenRoboImage(File(out, "$prefix$name.png").path)
     private fun click(text: String) = compose.onAllNodesWithText(text, substring = false).onFirst().performClick()
-    private fun clickDesc(desc: String) = compose.onAllNodesWithContentDescription(desc).onFirst().performClick()
+    /** Activates the element directly (a poster partly under the floating tab bar can't be hit by a synthetic tap). */
+    private fun clickDesc(desc: String) {
+        compose.onAllNodesWithContentDescription(desc).onFirst().performScrollTo()
+        settle(300)
+        compose.onAllNodesWithContentDescription(desc).onFirst().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+    }
 
     @Test fun fullFlow() = runFlow("")
 
     /** Unfolded foldable inner display (e.g. Galaxy Z Fold / Pixel Fold): two-pane & grid layouts. */
     @Test @Config(qualifiers = "w840dp-h900dp-xhdpi")
     fun unfoldedFlow() = runFlow("fold-")
+
+    /** Car head unit in split-screen: half of a 1024x600 screen. */
+    @Test @Config(qualifiers = "w512dp-h600dp-land-mdpi")
+    fun carSplitFlow() = runFlow("car-split-")
+
+    /** Player in split-screen windows: half a car screen, and a short top/bottom split. */
+    @Test @Config(qualifiers = "w512dp-h600dp-land-mdpi")
+    fun carSplitPlayer() = playerShot("car-split-player")
+
+    @Test @Config(qualifiers = "w1024dp-h300dp-land-mdpi")
+    fun shortSplitPlayer() = playerShot("short-split-player")
+
+    @Test @Config(qualifiers = "w1024dp-h600dp-land-mdpi")
+    fun carFullPlayer() = playerShot("car-full-player")
+
+    /** Full car head-unit screen (1024x600): navigation rail + adaptive hero. */
+    @Test @Config(qualifiers = "w1024dp-h600dp-land-mdpi")
+    fun carFullFlow() = runFlow("car-full-")
+
+    private fun playerShot(name: String) {
+        kotlinx.coroutines.runBlocking { graph.catalog.load("home") }
+        val pl = graph.store.playlist("home")!!
+        val vods = graph.catalog.current!!.vod
+        val ctx = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        val scenario = ActivityScenario.launch<PlayerActivity>(PlayerActivity.intent(ctx, PlayQueue(listOf(Playback.movieItem(pl, vods[0]), Playback.movieItem(pl, vods[2])), 0)))
+        settle(1000)
+        scenario.onActivity { a ->
+            a.error.value = null; a.buffering.value = false; a.controlsVisible.value = true
+            a.duration.longValue = 7_440_000; a.position.longValue = 4_360_000
+        }
+        settle(600)
+        prefix = ""
+        shot(name)
+        scenario.close()
+    }
 
     /** Tablet (e.g. 12" in landscape): navigation rail + large artwork. */
     @Test @Config(qualifiers = "w1280dp-h800dp-xhdpi")
@@ -217,6 +259,13 @@ class AppFlowScreenshotTest {
         settle(2500)
         shot("03-movies-rows")
 
+        // In short windows the swipe may scroll that row away: scroll back until it is visible.
+        repeat(3) {
+            if (compose.onAllNodesWithContentDescription("The Last Orchard").fetchSemanticsNodes().isEmpty()) {
+                compose.onRoot().performTouchInput { swipeDown(startY = bottom * .3f, endY = bottom * .7f) }
+                settle(800)
+            }
+        }
         clickDesc("The Last Orchard")
         settle(2500)
         shot("04-preview")

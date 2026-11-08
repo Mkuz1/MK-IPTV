@@ -362,14 +362,20 @@ private fun resume(ctx: android.content.Context, p: Progress, session: Session, 
 private fun Hero(hero: Any?, movies: Boolean, catalog: Catalog, session: Session, onPreview: (PreviewTarget) -> Unit) {
     val ctx = LocalContext.current
     val actions = LocalActions.current
-    Box(Modifier.fillMaxWidth().height(590.dp)) {
+    // Hero adapts to the window: never taller than ~3/4 of it (split-screen, car screens, landscape).
+    val cfg = androidx.compose.ui.platform.LocalConfiguration.current
+    val heroH = (cfg.screenHeightDp * 0.78f).coerceIn(300f, 590f).dp
+    Box(Modifier.fillMaxWidth().height(heroH)) {
         if (hero == null) {
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF241A4A), Mk.Bg))))
             return@Box
         }
         val title = (hero as? VodItem)?.name ?: (hero as SeriesItem).name
         val image = (hero as? VodItem)?.poster ?: (hero as? SeriesItem)?.let { it.backdrop ?: it.cover }
-        val wide = isWide()
+        // Side-by-side poster layout only when there's real room for it.
+        val wide = cfg.screenWidthDp >= 720
+        val posterH = (heroH * 0.62f).coerceAtMost(360.dp)
+        val posterW = posterH * (2f / 3f)
         Poster(image, title, Modifier.fillMaxSize(), corner = 0.dp)
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = .35f), .25f to Color.Transparent, .55f to Color.Transparent, .82f to Mk.Bg.copy(alpha = .85f), 1f to Mk.Bg)))
         if (wide) {
@@ -377,11 +383,11 @@ private fun Hero(hero: Any?, movies: Boolean, catalog: Catalog, session: Session
             Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Mk.Bg.copy(alpha = .2f), .55f to Mk.Bg.copy(alpha = .75f), 1f to Mk.Bg.copy(alpha = .9f))))
             Poster(
                 (hero as? VodItem)?.poster ?: (hero as SeriesItem).cover, title,
-                Modifier.align(Alignment.BottomStart).padding(start = 40.dp, bottom = 24.dp).size(240.dp, 360.dp), corner = 22.dp,
+                Modifier.align(Alignment.BottomStart).padding(start = 40.dp, bottom = 24.dp).size(posterW, posterH), corner = 22.dp,
             )
         }
         Column(
-            if (wide) Modifier.align(Alignment.BottomStart).padding(start = 310.dp, end = 32.dp, bottom = 30.dp).widthIn(max = 520.dp)
+            if (wide) Modifier.align(Alignment.BottomStart).padding(start = 40.dp + posterW + 30.dp, end = 32.dp, bottom = 30.dp).widthIn(max = 520.dp)
             else Modifier.align(Alignment.BottomCenter).padding(horizontal = 24.dp).padding(bottom = 6.dp),
             horizontalAlignment = if (wide) Alignment.Start else Alignment.CenterHorizontally,
         ) {

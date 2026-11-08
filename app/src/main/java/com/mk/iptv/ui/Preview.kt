@@ -1,6 +1,7 @@
 package com.mk.iptv.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -84,6 +85,7 @@ fun PreviewSheet(target: PreviewTarget, session: Session, onDismiss: () -> Unit)
                 .clip(RoundedCornerShape(36.dp))
                 .background(Brush.verticalGradient(listOf(Color(0xF21A1E2C), Color(0xFA0E1018))))
                 .glass(RoundedCornerShape(36.dp), strength = .6f)
+                .verticalScroll(androidx.compose.foundation.rememberScrollState())   // short windows: split-screen, car screens
                 .padding(20.dp)
                 .navigationBarsPadding()
         ) {

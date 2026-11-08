@@ -95,6 +95,10 @@ fun PlayerScreen(a: PlayerActivity) {
     val remote = casting || airplay != null
     val live = item?.kind == "live"
     var visible by a.controlsVisible
+    // Very short windows (top/bottom split-screen, small car screens): compact centre controls.
+    val compact = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp < 380
+    val sideBtn = if (compact) 48.dp else 64.dp
+    val mainBtn = if (compact) 64.dp else 88.dp
     val tv = remember { Device.isTv(a) }
     val playFocus = remember { androidx.compose.ui.focus.FocusRequester() }
     var locked by remember { mutableStateOf(false) }
@@ -229,23 +233,23 @@ fun PlayerScreen(a: PlayerActivity) {
                     // ---- center controls ----
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                         if (live) {
-                            GlassIconButton(Icons.Rounded.KeyboardArrowUp, { a.prev(); bump() }, size = 60.dp, iconSize = 30.dp, blur = false)
+                            GlassIconButton(Icons.Rounded.KeyboardArrowUp, { a.prev(); bump() }, size = sideBtn, iconSize = 30.dp, blur = false)
                         } else {
                             GlassIconButton(Icons.Rounded.Replay10, {
                                 if (airplay != null) a.airPlaySeekBy(-10_000) else player?.seekBack(); bump()
-                            }, size = 64.dp, iconSize = 30.dp, blur = false)
+                            }, size = sideBtn, iconSize = 30.dp, blur = false)
                         }
                         Spacer(Modifier.width(48.dp))
                         GlassIconButton(modifier = Modifier.focusRequester(playFocus), icon = if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, onClick = {
                             if (airplay != null) a.airPlayToggle() else player?.let { if (it.isPlaying) it.pause() else it.play() }; bump()
-                        }, size = 88.dp, iconSize = 42.dp, blur = false)
+                        }, size = mainBtn, iconSize = 42.dp, blur = false)
                         Spacer(Modifier.width(48.dp))
                         if (live) {
-                            GlassIconButton(Icons.Rounded.KeyboardArrowDown, { a.next(); bump() }, size = 60.dp, iconSize = 30.dp, blur = false)
+                            GlassIconButton(Icons.Rounded.KeyboardArrowDown, { a.next(); bump() }, size = sideBtn, iconSize = 30.dp, blur = false)
                         } else {
                             GlassIconButton(Icons.Rounded.Forward10, {
                                 if (airplay != null) a.airPlaySeekBy(10_000) else player?.seekForward(); bump()
-                            }, size = 64.dp, iconSize = 30.dp, blur = false)
+                            }, size = sideBtn, iconSize = 30.dp, blur = false)
                         }
                     }
                     Spacer(Modifier.weight(1f))

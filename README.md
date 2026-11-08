@@ -68,6 +68,18 @@ Every installed copy (phone, tablet, TV) will offer the update.
 - **Connection reuse**: one tuned HTTP client (connection pool, more parallel requests, 10 s connect timeout) is shared by API calls, artwork and video, so streams reuse warm connections.
 - **Resilient decoding**: automatic fallback to a software decoder if a hardware decoder fails. Fast keyframe seeking. **Tunneled playback** on Android TV for smooth 4K.
 
+## Split-screen, car screens & free-form windows
+
+- Every screen is resizable and handles size changes itself, so dragging the split-screen divider never restarts the app or interrupts playback.
+- In multi-window the player follows the window (no forced landscape).
+- Playback continues while you use the other app in the split. It pauses only when the player is fully hidden.
+- Layouts are driven by the **window** size:
+  - The hero banner never takes more than ~¾ of the window height.
+  - Sheets and dialogs scroll in short windows.
+  - The player uses compact controls below 380 dp of height.
+- Tested sizes: full car head unit (1024×600), half of it in split-screen (512×600) and a short top/bottom split (1024×300).
+- Works on Android head units that run regular Android. **Android Auto** (phone projection) does not run third-party video apps, and built-in **Android Automotive** cars restrict video while driving.
+
 ## Foldables, tablets & large screens
 
 - Layouts adapt to the window size, re-evaluated live when the device is folded or unfolded or the window is resized:

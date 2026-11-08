@@ -73,7 +73,7 @@ fun UpdateDialogHost() {
             Column(
                 Modifier.padding(24.dp).widthIn(max = 460.dp).fillMaxWidth()
                     .clip(RoundedCornerShape(32.dp)).background(Color(0xF2141826))
-                    .glass(RoundedCornerShape(32.dp), strength = .7f).padding(24.dp),
+                    .glass(RoundedCornerShape(32.dp), strength = .7f).verticalScroll(rememberScrollState()).padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Box(Modifier.size(64.dp).clip(CircleShape).background(Mk.accentGradient), contentAlignment = Alignment.Center) {
