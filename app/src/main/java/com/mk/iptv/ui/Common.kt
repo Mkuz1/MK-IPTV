@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -38,6 +39,9 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.animateFloat
+import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -172,12 +176,16 @@ fun TabHeader(title: String, session: Session, modifier: Modifier = Modifier, sh
         val lists = session.playlistsForProfile()
         if (session.playlist != null) {
             Box {
-                GlassChip(
+                if (widthClass() == WidthClass.COMPACT) {
+                    // Phones / narrow split-screen: icon only, so the title keeps its room.
+                    GlassIconButton(Icons.Rounded.Dns, { menu = true }, size = 40.dp, contentDescription = session.playlist.name)
+                } else GlassChip(
                     session.playlist.name, onClick = { menu = true }, leading = Icons.Rounded.Dns,
                     trailing = if (lists.size > 1) Icons.Rounded.KeyboardArrowDown else null, height = 40.dp,
-                    modifier = Modifier.widthIn(max = 116.dp),
+                    modifier = Modifier.widthIn(max = 150.dp),
                 )
                 DropdownMenu(menu, onDismissRequest = { menu = false }, modifier = Modifier.background(Mk.SheetBg)) {
+                    Text("Playlist", color = Mk.Faint, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
                     lists.forEach { pl ->
                         DropdownMenuItem(
                             text = { Text(pl.name, color = Mk.Text) },
@@ -192,6 +200,10 @@ fun TabHeader(title: String, session: Session, modifier: Modifier = Modifier, sh
                     DropdownMenuItem(text = { Text("Settings & playlists…", color = Mk.Sub) }, onClick = { menu = false; actions.playlists() })
                 }
             }
+            Spacer(Modifier.width(8.dp))
+        }
+        if (session.playlist != null) {
+            RefreshButton(session.playlist.id)
             Spacer(Modifier.width(8.dp))
         }
         if (showSearch) {
@@ -224,7 +236,11 @@ fun formatBytes(b: Long): String = when {
     else -> "0 MB"
 }
 
-fun toast(ctx: Context, msg: String) = Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
+/** Shows a toast from any thread (always posted to the main thread, so it can never crash a coroutine). */
+fun toast(ctx: Context, msg: String) {
+    val app = ctx.applicationContext
+    android.os.Handler(android.os.Looper.getMainLooper()).post { Toast.makeText(app, msg, Toast.LENGTH_SHORT).show() }
+}
 
 /* ---------------- Playback & downloads ---------------- */
 
@@ -319,4 +335,34 @@ object Playback {
         }
         runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addCategory(Intent.CATEGORY_BROWSABLE)) }
     }
+}
+
+
+private val nfCount = java.text.NumberFormat.getIntegerInstance()
+
+/** Re-downloads the library from the provider; spins while working, keeps the current library on failure. */
+@Composable
+fun RefreshButton(playlistId: String, size: Dp = 40.dp) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val busy by MkApp.graph.catalog.refreshingNow.collectAsState()
+    val spin = androidx.compose.animation.core.rememberInfiniteTransition(label = "spin")
+    val angle by spin.animateFloat(
+        0f, 360f,
+        androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(900, easing = androidx.compose.animation.core.LinearEasing)),
+        label = "angle",
+    )
+    GlassIconButton(
+        Icons.Rounded.Refresh,
+        {
+            if (!busy) scope.launch {
+                runCatching { MkApp.graph.catalog.refreshNow(playlistId) }
+                    .onSuccess { c -> toast(ctx, "Library updated · ${nfCount.format(c.live.size)} channels · ${nfCount.format(c.vod.size)} movies · ${nfCount.format(c.series.size)} series") }
+                    .onFailure { e -> toast(ctx, "Couldn't refresh: ${e.message ?: "network error"}") }
+            }
+        },
+        size = size,
+        modifier = if (busy) Modifier.graphicsLayer { rotationZ = angle } else Modifier,
+        contentDescription = "Refresh library",
+    )
 }

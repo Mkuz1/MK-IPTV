@@ -3,6 +3,7 @@ package com.mk.iptv.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -110,6 +111,7 @@ fun Modifier.glass(shape: Shape = RoundedCornerShape(24.dp), tint: Color = Color
         )
     )
     .drawBehind {
+        if (size.minDimension <= 1f) return@drawBehind   // zero-sized during split-screen resizes
         drawRect(
             Brush.radialGradient(
                 listOf(Color.White.copy(alpha = .16f * strength), Color.Transparent),
@@ -159,6 +161,17 @@ fun Modifier.tap(focusShape: Shape = RoundedCornerShape(14.dp), onClick: () -> U
         )
         .pressScale(src)
         .clickable(interactionSource = src, indication = null, onClick = onClick)
+}
+
+/** Like [tap], plus a long-press action (touch long-press, or holding OK on a TV remote). */
+@Composable
+fun Modifier.tapOrHold(focusShape: Shape = RoundedCornerShape(14.dp), onLongClick: () -> Unit, onClick: () -> Unit): Modifier {
+    val src = remember { MutableInteractionSource() }
+    val focused by src.collectIsFocusedAsState()
+    return this
+        .then(if (focused) Modifier.background(Color.White.copy(alpha = .10f), focusShape).border(2.5.dp, Color.White, focusShape) else Modifier)
+        .pressScale(src)
+        .combinedClickable(interactionSource = src, indication = null, onLongClick = onLongClick, onClick = onClick)
 }
 
 /* ---------------- Components ---------------- */
@@ -372,6 +385,7 @@ fun AmbientBackground(modifier: Modifier = Modifier, content: @Composable BoxSco
             .fillMaxSize()
             .background(Mk.Bg)
             .drawBehind {
+                if (size.minDimension <= 1f) return@drawBehind   // zero-sized during split-screen resizes
                 drawCircle(Brush.radialGradient(listOf(Color(0x806A4DFF), Color.Transparent), center = Offset(size.width * .1f, size.height * .2f), radius = size.width * .8f))
                 drawCircle(Brush.radialGradient(listOf(Color(0x60FF4D8D), Color.Transparent), center = Offset(size.width * 1f, size.height * .5f), radius = size.width * .75f))
                 drawCircle(Brush.radialGradient(listOf(Color(0x602BC3FF), Color.Transparent), center = Offset(size.width * .3f, size.height * .95f), radius = size.width * .8f))

@@ -102,27 +102,47 @@ class CatalogRepository(private val api: XtreamApi, private val store: LocalStor
         Catalog(lc.await(), l.await(), vc.await(), v.await(), sc.await(), s.await(), System.currentTimeMillis())
     }
 
+    private val _refreshingNow = kotlinx.coroutines.flow.MutableStateFlow(false)
+    /** True while the user-triggered (or background) library refresh is running. */
+    val refreshingNow: StateFlow<Boolean> = _refreshingNow.asStateFlow()
+
     /** Silent refresh: the UI keeps showing the cached catalog until the fresh one is ready. */
     private fun refreshInBackground(playlistId: String) {
-        if (refreshing == playlistId) return
+        scope.launch { runCatching { refreshNow(playlistId) } }
+    }
+
+    /**
+     * Re-downloads the whole library from the provider while the current one stays on screen.
+     * Returns the new catalog; throws with a readable message on failure (old library is kept).
+     */
+    suspend fun refreshNow(playlistId: String): Catalog {
+        if (refreshing == playlistId) throw IllegalStateException("Already refreshing")
         refreshing = playlistId
-        scope.launch {
-            try {
-                val p = store.playlist(playlistId) ?: return@launch
+        _refreshingNow.value = true
+        try {
+            return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val p = store.playlist(playlistId) ?: throw IllegalStateException("Playlist not found")
                 val c = creds(p)
                 val auth = runCatching { api.authenticate(c) }.getOrNull()
-                if (auth != null && !auth.ok) return@launch
+                if (auth != null && !auth.ok) throw IllegalStateException(auth.message ?: "Login failed")
                 val cat = fetchAll(c)
-                if (cat.vod.isEmpty() && cat.series.isEmpty() && cat.live.isEmpty()) return@launch
+                if (cat.vod.isEmpty() && cat.series.isEmpty() && cat.live.isEmpty()) throw IllegalStateException("The server returned an empty library")
                 writeDisk(playlistId, cat)
                 catalogs[playlistId] = cat
+                vodInfoCache.keys.removeAll { it.startsWith("$playlistId:") }
+                seriesInfoCache.keys.removeAll { it.startsWith("$playlistId:") }
+                epgCache.keys.removeAll { it.startsWith("$playlistId:") }
                 if (this@CatalogRepository.playlistId == playlistId) _state.value = CatalogState.Ready(cat)
                 store.upsertPlaylist((store.playlist(playlistId) ?: p).copy(
                     lastSync = System.currentTimeMillis(), status = auth?.status ?: p.status, expiry = auth?.expiry ?: p.expiry,
                     activeCons = auth?.activeCons ?: p.activeCons, maxCons = auth?.maxCons ?: p.maxCons,
                     liveCount = cat.live.size, movieCount = cat.vod.size, seriesCount = cat.series.size,
                 ))
-            } finally { refreshing = null }
+                cat
+            }
+        } finally {
+            refreshing = null
+            _refreshingNow.value = false
         }
     }
 

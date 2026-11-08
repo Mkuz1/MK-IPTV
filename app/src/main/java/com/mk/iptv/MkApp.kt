@@ -20,6 +20,7 @@ class MkApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        CrashReporter.install(this)
         // Media3 logs can include stream URLs (which contain Xtream credentials): keep them out of release logcat.
         if (!BuildConfig.DEBUG) androidx.media3.common.util.Log.setLogLevel(androidx.media3.common.util.Log.LOG_LEVEL_OFF)
         graph = AppGraph(this)

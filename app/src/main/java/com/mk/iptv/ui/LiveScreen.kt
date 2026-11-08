@@ -2,6 +2,11 @@ package com.mk.iptv.ui
 
 import android.view.ViewGroup
 import androidx.compose.foundation.background
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -78,7 +83,8 @@ import java.util.Locale
 fun LiveScreen(catalog: Catalog, session: Session) {
     val ctx = LocalContext.current
     val pl = session.playlist ?: return
-    var cat by rememberSaveable { mutableStateOf("all") }
+    var cat by rememberSaveable { mutableStateOf(session.data.settings.lastLiveCategory) }
+    LaunchedEffect(cat) { if (session.data.settings.lastLiveCategory != cat) MkApp.graph.store.updateSettings { it.copy(lastLiveCategory = cat) } }
     val cats = remember(catalog, session.hideAdult) {
         catalog.liveCategories.filter { !session.hideAdult || !CatalogRepository.isAdult(it.name) }
     }
@@ -93,7 +99,8 @@ fun LiveScreen(catalog: Catalog, session: Session) {
         }
     }
     var selectedId by rememberSaveable { mutableStateOf<Int?>(null) }
-    val selected = (selectedId?.let { catalog.liveById[it] }) ?: channels.firstOrNull()
+    // Keep playing the chosen channel while browsing other categories.
+    val selected = (selectedId?.let { catalog.liveById[it] }) ?: remember(catalog) { catalog.live.firstOrNull() }
 
     // Inline preview player
     val player = remember {
@@ -124,7 +131,9 @@ fun LiveScreen(catalog: Catalog, session: Session) {
         lifecycle.addObserver(obs)
         onDispose { lifecycle.removeObserver(obs); player.removeListener(l); player.release() }
     }
-    LaunchedEffect(selected?.id) {
+    val previewVisible = androidx.compose.ui.platform.LocalConfiguration.current.let { it.screenWidthDp >= 900 || it.screenHeightDp >= 640 }
+    LaunchedEffect(selected?.id, previewVisible) {
+        if (!previewVisible) { player.stop(); return@LaunchedEffect }
         val ch = selected ?: return@LaunchedEffect
         error = null
         player.setMediaItem(liveItem(XtreamApi.liveUrl(MkApp.graph.catalog.creds(pl), ch.id, liveFormats(session).first())))
@@ -181,54 +190,117 @@ fun LiveScreen(catalog: Catalog, session: Session) {
                     }
                 }
     }
-    val chips: @Composable () -> Unit = {
-                LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
-                    item { GlassChip("All · ${catalog.live.size}", selected = cat == "all", onClick = { cat = "all" }) }
-                    item { GlassChip("Favorites", selected = cat == "fav", onClick = { cat = "fav" }, leading = Icons.Rounded.Favorite) }
-                    items(cats, key = { it.id }) { c -> GlassChip(c.name, selected = cat == c.id, onClick = { cat = c.id }) }
-                }
-    }
+    val cfg = androidx.compose.ui.platform.LocalConfiguration.current
+    val threePane = cfg.screenWidthDp >= 900
+    val catWidth = when { cfg.screenWidthDp < 480 -> 150.dp; cfg.screenWidthDp < 720 -> 176.dp; else -> 250.dp }
+    // Short windows (car head units, split-screen): no inline preview, lists get the full height and
+    // tapping a channel opens it full screen. Also avoids holding a stream nobody can see.
+    val showPreview = threePane || cfg.screenHeightDp >= 640
+    val counts = remember(catalog) { catalog.live.groupingBy { it.categoryId }.eachCount() }
+    val favCount = favs.count { it.startsWith("live:") }
+    var catQuery by rememberSaveable { mutableStateOf("") }
+    var chQuery by rememberSaveable(cat) { mutableStateOf("") }
+    val shownCats = remember(cats, catQuery) { if (catQuery.isBlank()) cats else cats.filter { it.name.contains(catQuery.trim(), true) } }
+    val shownChannels = remember(channels, chQuery) { if (chQuery.isBlank()) channels else channels.filter { it.name.contains(chQuery.trim(), true) || it.num.toString() == chQuery.trim() } }
+    val catTitle = when (cat) { "all" -> "All channels"; "fav" -> "Favorites"; else -> cats.firstOrNull { it.id == cat }?.name ?: "Channels" }
 
     AmbientBackground {
-        if (isTwoPane()) {
-            // Unfolded foldable / tablet: player + now-playing on the left, channel guide on the right.
-            Column(Modifier.fillMaxSize()) {
-                TabHeader("Live TV", session)
-                Row(Modifier.fillMaxSize()) {
-                    Column(Modifier.weight(1.15f)) {
-                        previewCard(Modifier.padding(16.dp).fillMaxWidth().aspectRatio(16f / 9f))
-                        selected?.let { ch -> NowNextPanel(ch) }
-                    }
-                    LazyColumn(Modifier.weight(1f).fillMaxSize(), contentPadding = PaddingValues(top = 16.dp, bottom = 120.dp)) {
-                        item { chips() }
-                        if (channels.isEmpty()) item {
-                CenterMessage(if (cat == "fav") "No favorite channels" else "No channels", if (cat == "fav") "Tap ♡ on a channel to add it here." else null, modifier = Modifier.height(260.dp))
-                        }
-            items(channels, key = { it.id }) { ch ->
-                ChannelRow(
-                    ch, selected = ch.id == selected?.id, fav = session.isFav("live:${ch.id}"),
-                    onClick = { if (ch.id == selected?.id) openFullscreen(ch) else selectedId = ch.id },
-                    onFav = { MkApp.graph.store.toggleFavorite(session.profileId, "live:${ch.id}") },
-                )
+        Column(Modifier.fillMaxSize()) {
+            TabHeader("Live TV", session)
+            if (!threePane && showPreview) {
+                // Phones / split-screen: compact preview on top, never more than ~1/3 of the window.
+                Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
+                    previewCard(Modifier.heightIn(max = (cfg.screenHeightDp * 0.30f).coerceAtLeast(120f).dp).aspectRatio(16f / 9f))
+                }
             }
+            // Mac Finder-style columns: categories | channels (| preview on wide screens)
+            Row(Modifier.weight(1f).fillMaxWidth().padding(top = if (threePane) 12.dp else 0.dp)) {
+                LazyColumn(
+                    Modifier.width(catWidth).fillMaxHeight(),
+                    contentPadding = PaddingValues(start = 12.dp, end = 6.dp, bottom = 110.dp),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    if (cats.size > 10) item { MiniSearch(catQuery, { catQuery = it }, "Find category") }
+                    item { CategoryRow("All channels", counts.values.sum(), cat == "all", Icons.Rounded.LiveTv) { cat = "all" } }
+                    item { CategoryRow("Favorites", favCount, cat == "fav", Icons.Rounded.Favorite, Mk.Pink) { cat = "fav" } }
+                    item { Box(Modifier.padding(vertical = 6.dp, horizontal = 8.dp).fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = .1f))) }
+                    items(shownCats, key = { it.id }) { c -> CategoryRow(c.name, counts[c.id] ?: 0, cat == c.id) { cat = c.id } }
+                }
+                Box(Modifier.width(1.dp).fillMaxHeight().background(Color.White.copy(alpha = .08f)))
+                Column(Modifier.weight(1f).fillMaxHeight()) {
+                    Row(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(catTitle, color = Mk.Text, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                        Spacer(Modifier.width(6.dp))
+                        Text("${channels.size}", color = Mk.Sub, fontSize = 13.sp)
+                    }
+                    if (channels.size > 12) MiniSearch(chQuery, { chQuery = it }, "Find channel", Modifier.padding(horizontal = 12.dp))
+                    val listState = remember(cat) { androidx.compose.foundation.lazy.LazyListState() }
+                    LazyColumn(state = listState, contentPadding = PaddingValues(top = 4.dp, bottom = 110.dp)) {
+                        if (shownChannels.isEmpty()) item {
+                            CenterMessage(
+                                if (cat == "fav") "No favorite channels yet" else "No channels",
+                                if (cat == "fav") "Tap ♡ next to any channel to pin it here." else null,
+                                icon = if (cat == "fav") Icons.Rounded.Favorite else null, modifier = Modifier.height(260.dp),
+                            )
+                        }
+                        items(shownChannels, key = { it.id }) { ch ->
+                            ChannelRow(
+                                ch, selected = ch.id == selected?.id, fav = session.isFav("live:${ch.id}"), compact = catWidth < 200.dp && !threePane,
+                                onClick = { if (!showPreview || ch.id == selected?.id) openFullscreen(ch) else selectedId = ch.id },
+                                onFav = { MkApp.graph.store.toggleFavorite(session.profileId, "live:${ch.id}") },
+                            )
+                        }
+                    }
+                }
+                if (threePane) {
+                    Column(Modifier.width((cfg.screenWidthDp * 0.36f).dp).fillMaxHeight().padding(end = 16.dp)) {
+                        previewCard(Modifier.fillMaxWidth().aspectRatio(16f / 9f))
+                        selected?.let { ch -> Spacer(Modifier.height(12.dp)); NowNextPanel(ch, Modifier) }
                     }
                 }
             }
-        } else LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 120.dp)) {
-            item { TabHeader("Live TV", session) }
-            item { previewCard(Modifier.padding(16.dp).fillMaxWidth().aspectRatio(16f / 9f)) }
-            item { chips() }
-            if (channels.isEmpty()) item {
-                CenterMessage(if (cat == "fav") "No favorite channels" else "No channels", if (cat == "fav") "Tap ♡ on a channel to add it here." else null, modifier = Modifier.height(260.dp))
-            }
-            items(channels, key = { it.id }) { ch ->
-                ChannelRow(
-                    ch, selected = ch.id == selected?.id, fav = session.isFav("live:${ch.id}"),
-                    onClick = { if (ch.id == selected?.id) openFullscreen(ch) else selectedId = ch.id },
-                    onFav = { MkApp.graph.store.toggleFavorite(session.profileId, "live:${ch.id}") },
-                )
-            }
         }
+    }
+}
+
+/** One entry of the category column (Mac Finder-style list). */
+@Composable
+private fun CategoryRow(name: String, count: Int, selected: Boolean, icon: androidx.compose.ui.graphics.vector.ImageVector? = null, iconTint: Color = Color.White, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (selected) Mk.Accent.copy(alpha = .22f) else Color.Transparent)
+            .then(if (selected) Modifier.border(1.dp, Mk.Accent.copy(alpha = .45f), RoundedCornerShape(12.dp)) else Modifier)
+            .tap(RoundedCornerShape(12.dp), onClick)
+            .padding(horizontal = 8.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        icon?.let { Icon(it, null, tint = if (selected) Color.White else iconTint, modifier = Modifier.size(15.dp)); Spacer(Modifier.width(6.dp)) }
+        Text(name, color = if (selected) Color.White else Mk.Text.copy(alpha = .85f), fontSize = 13.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Spacer(Modifier.width(4.dp))
+        Text("$count", color = if (selected) Color.White.copy(alpha = .8f) else Mk.Faint, fontSize = 11.5.sp)
+        if (selected) Icon(androidx.compose.material.icons.Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Color.White, modifier = Modifier.size(14.dp))
+    }
+}
+
+/** Small glass filter field used above long lists. */
+@Composable
+private fun MiniSearch(value: String, onChange: (String) -> Unit, placeholder: String, modifier: Modifier = Modifier) {
+    Row(
+        modifier.fillMaxWidth().padding(bottom = 6.dp).height(38.dp).glass(RoundedCornerShape(12.dp)).padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Rounded.Search, null, tint = Mk.Sub, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Box(Modifier.weight(1f)) {
+            if (value.isEmpty()) Text(placeholder, color = Mk.Faint, fontSize = 13.sp, maxLines = 1)
+            androidx.compose.foundation.text.BasicTextField(
+                value, onChange, singleLine = true,
+                textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 13.sp),
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(Mk.Accent), modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (value.isNotEmpty()) Icon(Icons.Rounded.Close, "Clear", tint = Mk.Sub, modifier = Modifier.size(16.dp).tap(CircleShape) { onChange("") })
     }
 }
 
@@ -239,24 +311,24 @@ fun epgFraction(e: EpgEntry): Float {
 }
 
 @Composable
-private fun ChannelRow(ch: LiveChannel, selected: Boolean, fav: Boolean, onClick: () -> Unit, onFav: () -> Unit) {
+private fun ChannelRow(ch: LiveChannel, selected: Boolean, fav: Boolean, compact: Boolean = false, onClick: () -> Unit, onFav: () -> Unit) {
     val epg by produceState(MkApp.graph.catalog.cachedEpg(ch.id), ch.id) { value = MkApp.graph.catalog.epg(ch.id) }
     val now = epg?.firstOrNull()
     val next = epg?.getOrNull(1)
     Row(
         Modifier
-            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .padding(horizontal = if (compact) 8.dp else 12.dp, vertical = 3.dp)
             .fillMaxWidth()
             .then(
                 if (selected) Modifier.liquidGlass(RoundedCornerShape(22.dp)).border(1.5.dp, Mk.Accent.copy(alpha = .5f), RoundedCornerShape(22.dp))
                 else Modifier.clip(RoundedCornerShape(22.dp)).background(Color.White.copy(alpha = .04f))
             )
-            .tap(onClick = onClick)
-            .padding(10.dp),
+            .tap(RoundedCornerShape(22.dp), onClick)
+            .padding(if (compact) 8.dp else 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            Modifier.size(54.dp).clip(RoundedCornerShape(16.dp)).background(titleBrush(ch.name)).border(1.dp, Color.White.copy(alpha = .2f), RoundedCornerShape(16.dp)),
+            Modifier.size(if (compact) 42.dp else 54.dp).clip(RoundedCornerShape(if (compact) 12.dp else 16.dp)).background(titleBrush(ch.name)).border(1.dp, Color.White.copy(alpha = .2f), RoundedCornerShape(16.dp)),
             contentAlignment = Alignment.Center,
         ) {
             Text(ch.name.split(" ").filter { it.isNotBlank() }.take(3).joinToString("") { it.take(1) }.uppercase(), color = Color.White, fontWeight = FontWeight.Black, fontSize = 13.sp)
@@ -286,9 +358,9 @@ private fun ChannelRow(ch: LiveChannel, selected: Boolean, fav: Boolean, onClick
 
 /** Larger now/next guide shown beside the player on unfolded screens. */
 @Composable
-private fun NowNextPanel(ch: LiveChannel) {
+private fun NowNextPanel(ch: LiveChannel, modifier: Modifier = Modifier.padding(horizontal = 16.dp)) {
     val epg by produceState(MkApp.graph.catalog.cachedEpg(ch.id), ch.id) { value = MkApp.graph.catalog.epg(ch.id) }
-    Column(Modifier.padding(horizontal = 16.dp).fillMaxWidth().glass(RoundedCornerShape(24.dp)).padding(18.dp)) {
+    Column(modifier.fillMaxWidth().glass(RoundedCornerShape(24.dp)).padding(18.dp)) {
         Text("${if (ch.num > 0) "${ch.num} · " else ""}${ch.name}", color = Mk.Sub, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
         val now = epg?.firstOrNull()
         Text("NOW", color = Mk.Live, fontSize = 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.5.sp, modifier = Modifier.padding(top = 10.dp))

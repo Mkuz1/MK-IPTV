@@ -115,10 +115,16 @@ class AppFlowScreenshotTest {
 
     private var prefix = ""
     private fun shot(name: String) = captureScreenRoboImage(File(out, "$prefix$name.png").path)
-    private fun click(text: String) = compose.onAllNodesWithText(text, substring = false).onFirst().performClick()
+    /** Activates the first matching element directly (works even when partly under a floating bar). */
+    private fun click(text: String) {
+        val node = compose.onAllNodesWithText(text, substring = false).onFirst()
+        if (node.fetchSemanticsNode().config.contains(androidx.compose.ui.semantics.SemanticsActions.OnClick))
+            node.performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+        else node.performClick()
+    }
     /** Activates the element directly (a poster partly under the floating tab bar can't be hit by a synthetic tap). */
     private fun clickDesc(desc: String) {
-        compose.onAllNodesWithContentDescription(desc).onFirst().performScrollTo()
+        runCatching { compose.onAllNodesWithContentDescription(desc).onFirst().performScrollTo() } // only inside scrolling lists
         settle(300)
         compose.onAllNodesWithContentDescription(desc).onFirst().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
     }
@@ -128,6 +134,31 @@ class AppFlowScreenshotTest {
     /** Unfolded foldable inner display (e.g. Galaxy Z Fold / Pixel Fold): two-pane & grid layouts. */
     @Test @Config(qualifiers = "w840dp-h900dp-xhdpi")
     fun unfoldedFlow() = runFlow("fold-")
+
+    /** Android 9 car head unit in split-screen (user report). */
+    @Test @Config(sdk = [28], qualifiers = "w512dp-h600dp-land-mdpi")
+    fun android9SplitFlow() = runFlow("a9-split-")
+
+    @Test @Config(sdk = [28], qualifiers = "w512dp-h600dp-land-mdpi")
+    fun android9SplitPlayer() {
+        kotlinx.coroutines.runBlocking { graph.catalog.load("home") }
+        val pl = graph.store.playlist("home")!!
+        val vods = graph.catalog.current!!.vod
+        val ctx = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        val scenario = ActivityScenario.launch<PlayerActivity>(PlayerActivity.intent(ctx, PlayQueue(listOf(Playback.movieItem(pl, vods[0])), 0)))
+        settle(800)
+        scenario.onActivity { a ->
+            shadowOf(a).setInMultiWindowMode(true)
+            a.onMultiWindowModeChanged(true, a.resources.configuration)
+            a.onConfigurationChanged(a.resources.configuration)
+        }
+        settle(800)
+        scenario.moveToState(androidx.lifecycle.Lifecycle.State.STARTED)   // other app focused (Android 9: paused)
+        settle(400)
+        scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+        settle(400)
+        scenario.close()
+    }
 
     /** Car head unit in split-screen: half of a 1024x600 screen. */
     @Test @Config(qualifiers = "w512dp-h600dp-land-mdpi")
@@ -327,6 +358,12 @@ class AppFlowScreenshotTest {
         settle(2500)
         shot("08-downloads")
 
+        repeat(4) {
+            if (compose.onAllNodesWithText("Overcast").fetchSemanticsNodes().isEmpty()) {
+                compose.onRoot().performTouchInput { swipeUp(startY = bottom * .7f, endY = bottom * .4f) }
+                settle(600)
+            }
+        }
         click("Overcast")
         settle(2500)
         shot("09-downloaded-episodes")
@@ -338,12 +375,24 @@ class AppFlowScreenshotTest {
         settle(6000)
         shot("10-live-tv")
 
+        // Mac-style columns: pick a category on the left, its channels open on the right.
+        click("Sports")
+        settle(3000)
+        shot("10b-live-category")
+
+        // Refresh the library from the provider (keeps the current library on screen while it works).
+        clickDesc("Refresh library")
+        waitFor(30_000) { !graph.catalog.refreshingNow.value }
+        settle(800)
+        assertTrue(graph.store.playlist("home")!!.lastSync > 0)
+
         compose.onAllNodesWithText("Favorites").onLast().performClick() // the tab (drawn last), not the Live TV chip
         settle(4000)
         shot("15-favorites")
 
         // Playlists moved out of the tab bar: header playlist button -> Manage playlists…
-        click("Home Server")
+        // Playlist button: a chip with the name on wide screens, an icon (same label) on phones.
+        if (compose.onAllNodesWithText("Home Server").fetchSemanticsNodes().isNotEmpty()) click("Home Server") else clickDesc("Home Server")
         settle(600)
         click("Settings & playlists…")
         settle(1500)

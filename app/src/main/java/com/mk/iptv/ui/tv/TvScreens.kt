@@ -33,6 +33,7 @@ import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.LiveTv
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Replay
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
@@ -114,6 +115,7 @@ import com.mk.iptv.ui.progressFor
 import com.mk.iptv.ui.ratingText
 import com.mk.iptv.ui.rememberSession
 import com.mk.iptv.ui.tap
+import com.mk.iptv.ui.tapOrHold
 import com.mk.iptv.ui.titleBrush
 import com.mk.iptv.ui.year
 import kotlinx.coroutines.delay
@@ -151,6 +153,18 @@ fun TvHomeScreen() {
                 Spacer(Modifier.width(10.dp))
                 Text("MK IPTV", color = Mk.Text, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp, letterSpacing = 1.sp)
             }
+            session.playlist?.let { pl ->
+                val busy by MkApp.graph.catalog.refreshingNow.collectAsState()
+                val ctx = LocalContext.current
+                val scope = rememberCoroutineScope()
+                TvMenuAction(if (busy) "Refreshing…" else "Refresh library", Icons.Rounded.Refresh) {
+                    if (!busy) scope.launch {
+                        runCatching { MkApp.graph.catalog.refreshNow(pl.id) }
+                            .onSuccess { com.mk.iptv.ui.toast(ctx, "Library updated · ${it.live.size} channels · ${it.vod.size} movies · ${it.series.size} series") }
+                            .onFailure { com.mk.iptv.ui.toast(ctx, "Couldn't refresh: ${it.message}") }
+                    }
+                }
+            }
             TvTab.entries.forEach { t ->
                 var focused by remember { mutableStateOf(false) }
                 val on = t == tab
@@ -187,6 +201,20 @@ fun TvHomeScreen() {
                 else -> Unit
             }
         }
+    }
+}
+
+@Composable
+private fun TvMenuAction(label: String, icon: ImageVector, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    val color = if (focused) Color(0xFF0A0B10) else Color.White.copy(alpha = .7f)
+    Row(
+        Modifier.fillMaxWidth().height(44.dp).onFocusChanged { focused = it.isFocused }.clip(RoundedCornerShape(22.dp))
+            .background(if (focused) Color.White else Color.Transparent).tap(RoundedCornerShape(22.dp), onClick).padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, tint = color, modifier = Modifier.size(20.dp)); Spacer(Modifier.width(14.dp))
+        Text(label, color = color, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -486,7 +514,8 @@ private val hm = SimpleDateFormat("HH:mm", Locale.getDefault())
 fun TvLive(catalog: Catalog, session: Session) {
     val ctx = LocalContext.current
     val pl = session.playlist ?: return
-    var cat by rememberSaveable { mutableStateOf("all") }
+    var cat by rememberSaveable { mutableStateOf(session.data.settings.lastLiveCategory) }
+    LaunchedEffect(cat) { if (session.data.settings.lastLiveCategory != cat) MkApp.graph.store.updateSettings { it.copy(lastLiveCategory = cat) } }
     val cats = remember(catalog, session.hideAdult) { catalog.liveCategories.filter { !session.hideAdult || !CatalogRepository.isAdult(it.name) } }
     val favs = session.favorites()
     val channels = remember(catalog, cat, favs) {
@@ -507,15 +536,23 @@ fun TvLive(catalog: Catalog, session: Session) {
         val url = XtreamApi.liveUrl(MkApp.graph.catalog.creds(pl), ch.id, liveFormats(session).first())
         player.setMediaItem(MediaItem.fromUri(url)); player.prepare(); player.playWhenReady = true
     }
+    val counts = remember(catalog) { catalog.live.groupingBy { it.categoryId }.eachCount() }
     Row(Modifier.fillMaxSize().padding(24.dp)) {
+        // Category column (Mac Finder-style): focus/OK selects, channels open to the right.
+        LazyColumn(Modifier.width(210.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            item { TvCategoryRow("All channels", catalog.live.size, cat == "all") { cat = "all" } }
+            item { TvCategoryRow("♥ Favorites", favs.count { it.startsWith("live:") }, cat == "fav") { cat = "fav" } }
+            items(cats, key = { it.id }) { c -> TvCategoryRow(c.name, counts[c.id] ?: 0, cat == c.id) { cat = c.id } }
+        }
+        Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
-                item { GlassChip("All · ${catalog.live.size}", cat == "all", { cat = "all" }) }
-                item { GlassChip("Favorites", cat == "fav", { cat = "fav" }, leading = Icons.Rounded.Favorite) }
-                items(cats, key = { it.id }) { c -> GlassChip(c.name, cat == c.id, { cat = c.id }) }
-            }
             LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                items(channels, key = { it.id }) { ch -> TvChannelRow(ch, ch.id == playing?.id, session.isFav("live:${ch.id}"), onFocus = { focusedCh = ch }) {
+                if (channels.isEmpty()) item { CenterMessage(if (cat == "fav") "No favorite channels yet" else "No channels", if (cat == "fav") "Hold OK on any channel to add it to Favorites." else null) }
+                items(channels, key = { it.id }) { ch -> TvChannelRow(ch, ch.id == playing?.id, session.isFav("live:${ch.id}"), onFocus = { focusedCh = ch }, onFav = {
+                    val was = session.isFav("live:${ch.id}")
+                    MkApp.graph.store.toggleFavorite(session.profileId, "live:${ch.id}")
+                    com.mk.iptv.ui.toast(ctx, if (was) "Removed ${ch.name} from Favorites" else "Added ${ch.name} to Favorites")
+                }) {
                     player.pause()
                     Playback.launch(ctx, PlayQueue(Playback.liveItems(pl, channels), channels.indexOf(ch)))
                 } }
@@ -543,14 +580,30 @@ fun TvLive(catalog: Catalog, session: Session) {
 }
 
 @Composable
-private fun TvChannelRow(ch: LiveChannel, playing: Boolean, fav: Boolean, onFocus: () -> Unit, onClick: () -> Unit) {
+private fun TvCategoryRow(name: String, count: Int, selected: Boolean, onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    Row(
+        Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused }
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (focused) Color.White else if (selected) Mk.Accent.copy(alpha = .22f) else Color.Transparent)
+            .tap(RoundedCornerShape(14.dp), onClick).padding(horizontal = 12.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val c = if (focused) Color(0xFF0A0B10) else Color.White
+        Text(name, color = c, fontSize = 14.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Text("$count", color = c.copy(alpha = .6f), fontSize = 12.sp)
+    }
+}
+
+@Composable
+private fun TvChannelRow(ch: LiveChannel, playing: Boolean, fav: Boolean, onFocus: () -> Unit, onFav: () -> Unit = {}, onClick: () -> Unit) {
     val epg by produceState(MkApp.graph.catalog.cachedEpg(ch.id), ch.id) { value = MkApp.graph.catalog.epg(ch.id) }
     var focused by remember { mutableStateOf(false) }
     Row(
         Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused; if (it.isFocused) onFocus() }
             .clip(RoundedCornerShape(18.dp))
             .background(if (focused) Color.White.copy(alpha = .16f) else if (playing) Color.White.copy(alpha = .07f) else Color.White.copy(alpha = .03f))
-            .tap(RoundedCornerShape(18.dp), onClick).padding(10.dp),
+            .tapOrHold(RoundedCornerShape(18.dp), onLongClick = onFav, onClick = onClick).padding(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(titleBrush(ch.name)), contentAlignment = Alignment.Center) {

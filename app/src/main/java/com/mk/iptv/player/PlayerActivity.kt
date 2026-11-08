@@ -62,7 +62,7 @@ class PlayerActivity : AppCompatActivity() {
         private val json = Json { ignoreUnknownKeys = true }
         fun intent(ctx: Context, queue: PlayQueue): Intent =
             Intent(ctx, PlayerActivity::class.java)
-                .putExtra("queue", json.encodeToString(PlayQueue.serializer(), queue))
+                .putExtra("queueToken", NowPlaying.put(ctx, queue))   // never the queue itself: see NowPlaying
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK.takeIf { ctx !is android.app.Activity } ?: 0)
     }
 
@@ -133,7 +133,7 @@ class PlayerActivity : AppCompatActivity() {
             }
         }
 
-        val q = intent.getStringExtra("queue")?.let { runCatching { json.decodeFromString(PlayQueue.serializer(), it) }.getOrNull() }
+        val q = NowPlaying.take(this, intent.getLongExtra("queueToken", -1))
         if (q == null || q.items.isEmpty()) { finish(); return }
         queue.value = q
 
@@ -447,7 +447,7 @@ class PlayerActivity : AppCompatActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        val q = intent.getStringExtra("queue")?.let { runCatching { json.decodeFromString(PlayQueue.serializer(), it) }.getOrNull() } ?: return
+        val q = NowPlaying.take(this, intent.getLongExtra("queueToken", -1)) ?: return
         saveProgress()
         queue.value = q
         load(q.index, resume = true)

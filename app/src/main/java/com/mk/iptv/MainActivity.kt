@@ -89,6 +89,7 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                     com.mk.iptv.update.UpdateDialogHost()
+                    CrashReportDialog()
                 }
             }
         }
@@ -106,4 +107,29 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun dec(s: String?) = URLDecoder.decode(s.orEmpty(), "UTF-8")
+}
+
+
+/** After a crash, offers to share the (credential-free) report. */
+@androidx.compose.runtime.Composable
+private fun CrashReportDialog() {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val state = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(CrashReporter.pending(ctx)) }
+    val r = state.value ?: return
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { CrashReporter.clear(ctx); state.value = null },
+        containerColor = com.mk.iptv.ui.Mk.SheetBg,
+        title = { androidx.compose.material3.Text("MK IPTV closed unexpectedly", color = com.mk.iptv.ui.Mk.Text) },
+        text = { androidx.compose.material3.Text("Sharing the error report helps fix it. It contains no passwords or stream links.", color = com.mk.iptv.ui.Mk.Sub) },
+        confirmButton = {
+            androidx.compose.material3.TextButton({
+                val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+                    .putExtra(android.content.Intent.EXTRA_SUBJECT, "MK IPTV crash report")
+                    .putExtra(android.content.Intent.EXTRA_TEXT, r.take(60_000))
+                runCatching { ctx.startActivity(android.content.Intent.createChooser(send, "Share crash report")) }
+                CrashReporter.clear(ctx); state.value = null
+            }) { androidx.compose.material3.Text("Share report", color = com.mk.iptv.ui.Mk.Accent) }
+        },
+        dismissButton = { androidx.compose.material3.TextButton({ CrashReporter.clear(ctx); state.value = null }) { androidx.compose.material3.Text("Dismiss", color = com.mk.iptv.ui.Mk.Text) } },
+    )
 }

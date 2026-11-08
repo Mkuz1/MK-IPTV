@@ -78,6 +78,8 @@ data class AppSettings(
     val updateUrl: String? = null,
     val autoCheckUpdates: Boolean = true,
     val lastUpdateCheck: Long = 0,
+    /** Last opened Live TV category ("all", "fav" or a category id). */
+    val lastLiveCategory: String = "all",
 )
 
 /* ---------------- Catalog (from Xtream) ---------------- */

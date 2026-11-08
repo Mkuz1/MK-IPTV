@@ -12,7 +12,13 @@ An Android IPTV player for **Xtream Codes** playlists with a Netflix-style brows
 - **Favorites**: one place for your My List movies and series and your favorite live channels.
 - **Movies & Series tabs**: a hero banner plus Netflix-style rows (Continue Watching, My List, Recently Added, Top Rated / Top 10, every genre). Tapping a title opens a glass **quick preview** with the poster, year, runtime, age rating, rating, genre, description, cast and director, plus Play / Trailer / My List / Download.
 - **Series detail**: seasons, episodes with thumbnails and summaries, resume where you left off, auto-play of the next episode.
-- **Live TV**: inline live preview, categories and favorites, now/next TV guide with progress bars, channel up/down in the player.
+- **Live TV**: Mac Finder-style columns.
+  - The left column holds "All channels", "Favorites" and every category with its channel count, plus a filter box.
+  - Picking a category opens its channels in the right column, with now/next guide, progress bars, ♡ favorite and a channel filter box.
+  - Wide screens add a third column with the live preview and a large now/next panel.
+  - Short windows (car head units, split-screen) skip the inline preview, and a tap opens the channel full screen.
+  - The last category is remembered. On TV, hold OK on a channel to (un)favorite it.
+- **Refresh library**: ⟳ button in every main header (and in the TV menu) re-downloads channels, movies and series from the provider while you keep browsing.
 - **Downloads**: download movies, single episodes or a whole season and watch fully offline.
   - The Downloads page lists every title with its **thumbnail, title, size and status** (downloading %, paused, failed, ready offline).
   - Opening a series shows **all downloaded episodes**, grouped by season, with play / delete for each.
