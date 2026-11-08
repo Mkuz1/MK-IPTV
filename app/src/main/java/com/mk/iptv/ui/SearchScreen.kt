@@ -124,5 +124,5 @@ fun SearchScreen() {
             }
         }
     }
-    preview?.let { PreviewSheet(it, session) { preview = null } }
+    preview?.let { if (actions.openDetail(it)) preview = null else PreviewSheet(it, session) { preview = null } }
 }

@@ -119,6 +119,8 @@ class LocalStore(dir: File) {
 
     fun progress(profileId: String, key: String) = data.value.progress[profileId]?.get(key)
 
+    fun updateSettings(block: (AppSettings) -> AppSettings) = update { it.copy(settings = block(it.settings)) }
+
     fun dismissContinue(profileId: String, key: String) = update { d ->
         d.copy(dismissed = d.dismissed + (profileId to (d.dismissed[profileId].orEmpty() + (key to System.currentTimeMillis()))))
     }

@@ -87,6 +87,13 @@ class PlayerActivity : AppCompatActivity() {
     val inPip = mutableStateOf(false)
     val offline = mutableStateOf(false)
     val audioTracks = mutableStateOf<List<TrackOption>>(emptyList())
+    /** Controls overlay visibility + user-interaction counter (drives auto-hide). */
+    val controlsVisible = mutableStateOf(true)
+    val interaction = mutableIntStateOf(0)
+    /** Time of the last remote-control seek while controls are hidden (shows a small seek bar). */
+    val seekOsd = mutableLongStateOf(0L)
+    private var osdJob: Job? = null
+
     /** Hinge position (top, bottom in px) while a foldable is half-open with a horizontal fold ("tabletop"). */
     val tabletopHinge = mutableStateOf<Pair<Int, Int>?>(null)
     private var hasFold = false
@@ -130,11 +137,7 @@ class PlayerActivity : AppCompatActivity() {
         if (q == null || q.items.isEmpty()) { finish(); return }
         queue.value = q
 
-        exo = ExoPlayer.Builder(this)
-            .setLoadControl(DefaultLoadControl.Builder().setBufferDurationsMs(15_000, 60_000, 1_500, 3_000).build())
-            .setSeekBackIncrementMs(10_000)
-            .setSeekForwardIncrementMs(10_000)
-            .build()
+        exo = Players.build(this, graph.downloads.upstream)
         exo.addListener(listener)
 
         Cast.context(this)?.let { ctx ->
@@ -223,12 +226,16 @@ class PlayerActivity : AppCompatActivity() {
             castPlayer?.playWhenReady = true
         } else {
             val factory = if (isOffline) graph.downloads.offlineFactory else graph.downloads.upstream
-            val source = DefaultMediaSourceFactory(factory).createMediaSource(mediaItem(item, item.url, forCast = false))
+            val source = Players.mediaSourceFactory(this, factory).createMediaSource(mediaItem(item, localUrl(item), forCast = false))
             exo.setMediaSource(source, startAt)
             exo.prepare()
             exo.playWhenReady = airplay.value == null
         }
     }
+
+    /** Local playback URL: for live channels MPEG-TS first when "Fastest" is selected (Cast always uses HLS). */
+    private fun localUrl(item: PlayItem): String =
+        if (item.kind == "live" && item.altUrl != null && graph.store.data.value.settings.liveFormat != "hls") item.altUrl else item.url
 
     fun next() { if (index.intValue < queue.value.items.lastIndex) load(index.intValue + 1, resume = current?.kind == "live") }
     fun prev() { if (index.intValue > 0) load(index.intValue - 1, resume = current?.kind == "live") }
@@ -255,7 +262,9 @@ class PlayerActivity : AppCompatActivity() {
             val item = current ?: return
             if (!triedAlt && item.altUrl != null && player.value === exo) {
                 triedAlt = true
-                val src = DefaultMediaSourceFactory(graph.downloads.upstream).createMediaSource(MediaItem.fromUri(item.altUrl))
+                // Live: switch between MPEG-TS and HLS automatically.
+                val other = if (localUrl(item) == item.url) item.altUrl else item.url
+                val src = Players.mediaSourceFactory(this@PlayerActivity, graph.downloads.upstream).createMediaSource(mediaItem(item, other, forCast = false))
                 exo.setMediaSource(src); exo.prepare(); exo.play()
                 return
             }
@@ -428,7 +437,7 @@ class PlayerActivity : AppCompatActivity() {
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        if (exo.isPlaying) enterPip()
+        if (exo.isPlaying && !Device.isTv(this)) enterPip()
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
@@ -458,6 +467,54 @@ class PlayerActivity : AppCompatActivity() {
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         applyOrientationPolicy()
+    }
+
+    /* ---------------- TV remote / keyboard ---------------- */
+
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        if (event.action == android.view.KeyEvent.ACTION_DOWN && handleKey(event.keyCode)) return true
+        return super.dispatchKeyEvent(event)
+    }
+
+    private fun showControls() { controlsVisible.value = true; interaction.intValue++ }
+
+    private fun osdSeek(deltaMs: Long) {
+        val p = player.value ?: return
+        if (airplay.value != null) airPlaySeekBy(deltaMs) else p.seekTo((p.currentPosition + deltaMs).coerceAtLeast(0))
+        position.longValue = (position.longValue + deltaMs).coerceAtLeast(0)
+        seekOsd.longValue = System.currentTimeMillis()
+        osdJob?.cancel()
+        osdJob = lifecycleScope.launch { delay(1800); seekOsd.longValue = 0 }
+    }
+
+    private fun togglePlay() {
+        if (airplay.value != null) airPlayToggle() else player.value?.let { if (it.isPlaying) it.pause() else it.play() }
+    }
+
+    private fun handleKey(code: Int): Boolean {
+        val live = current?.kind == "live"
+        when (code) {
+            android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, android.view.KeyEvent.KEYCODE_MEDIA_PLAY, android.view.KeyEvent.KEYCODE_MEDIA_PAUSE -> { togglePlay(); showControls(); return true }
+            android.view.KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { if (!live) osdSeek(30_000); return true }
+            android.view.KeyEvent.KEYCODE_MEDIA_REWIND -> { if (!live) osdSeek(-30_000); return true }
+            android.view.KeyEvent.KEYCODE_CHANNEL_UP, android.view.KeyEvent.KEYCODE_MEDIA_NEXT -> { next(); return true }
+            android.view.KeyEvent.KEYCODE_CHANNEL_DOWN, android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS -> { prev(); return true }
+        }
+        if (controlsVisible.value) {
+            if (code == android.view.KeyEvent.KEYCODE_BACK && Device.isTv(this)) { controlsVisible.value = false; return true }
+            interaction.intValue++ // keep controls up while the user navigates them
+            return false
+        }
+        return when (code) {
+            android.view.KeyEvent.KEYCODE_DPAD_CENTER, android.view.KeyEvent.KEYCODE_ENTER, android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                if (!live) togglePlay(); showControls(); true
+            }
+            android.view.KeyEvent.KEYCODE_DPAD_LEFT -> { if (live) showControls() else osdSeek(-10_000); true }
+            android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> { if (live) showControls() else osdSeek(10_000); true }
+            android.view.KeyEvent.KEYCODE_DPAD_UP -> { if (live) prev() else showControls(); true }
+            android.view.KeyEvent.KEYCODE_DPAD_DOWN -> { if (live) next() else showControls(); true }
+            else -> false
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

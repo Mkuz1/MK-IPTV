@@ -122,7 +122,7 @@ private fun FavSection(title: String) =
 
 @Composable
 private fun FavPoster(url: String?, title: String, progress: Float?, onClick: () -> Unit) {
-    Box(Modifier.fillMaxWidth().height(162.dp).tap(onClick)) {
+    Box(Modifier.fillMaxWidth().height(162.dp).tap(onClick = onClick)) {
         Poster(url, title, Modifier.fillMaxSize())
         if (progress == 1f) WatchedBadge(Modifier.align(Alignment.TopStart).padding(5.dp))
         else if (progress != null && progress > 0f) Box(Modifier.align(Alignment.BottomCenter).padding(8.dp)) { ProgressLine(progress, height = 3.dp) }

@@ -97,11 +97,18 @@ fun rememberSession(): Session {
 
 /* ---------------- Navigation ---------------- */
 
-class Actions(private val nav: NavController) {
+class Actions(private val nav: NavController, val isTv: Boolean = false) {
     fun back() { nav.popBackStack() }
     fun home() = nav.navigate("home") { popUpTo(0) { inclusive = true } }
     fun profiles() = nav.navigate("profiles") { popUpTo(0) { inclusive = true } }
     fun series(id: Int) = nav.navigate("series/$id")
+    fun movie(id: Int) = nav.navigate("movie/$id")
+    /** On TV, titles open a full detail page instead of the phone's bottom sheet. Returns true if handled. */
+    fun openDetail(t: PreviewTarget): Boolean {
+        if (!isTv) return false
+        when (t) { is PreviewTarget.Movie -> movie(t.item.id); is PreviewTarget.Series -> series(t.item.id) }
+        return true
+    }
     fun category(type: String, id: String, title: String) = nav.navigate("category/$type/${enc(id)}/${enc(title)}")
     fun search() = nav.navigate("search")
     fun playlists() = nav.navigate("playlists")
@@ -182,7 +189,7 @@ fun TabHeader(title: String, session: Session, modifier: Modifier = Modifier, sh
                             },
                         )
                     }
-                    DropdownMenuItem(text = { Text("Manage playlists…", color = Mk.Sub) }, onClick = { menu = false; actions.playlists() })
+                    DropdownMenuItem(text = { Text("Settings & playlists…", color = Mk.Sub) }, onClick = { menu = false; actions.playlists() })
                 }
             }
             Spacer(Modifier.width(8.dp))

@@ -1,6 +1,8 @@
 package com.mk.iptv
 
 import android.os.Bundle
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -50,7 +52,9 @@ class MainActivity : AppCompatActivity() {
         setContent {
             MkTheme {
                 val nav = rememberNavController()
-                val actions = remember(nav) { Actions(nav) }
+                val tv = remember { com.mk.iptv.player.Device.isTv(this@MainActivity) }
+                val actions = remember(nav) { Actions(nav, tv) }
+                androidx.compose.runtime.LaunchedEffect(Unit) { MkApp.graph.updates.check(auto = true) }
                 CompositionLocalProvider(LocalActions provides actions) {
                     NavHost(
                         nav, startDestination = start,
@@ -59,11 +63,15 @@ class MainActivity : AppCompatActivity() {
                     ) {
                         composable("welcome") { WelcomeScreen() }
                         composable("profiles") { ProfilesScreen() }
-                        composable("home") { HomeScreen() }
+                        composable("home") { if (tv) com.mk.iptv.ui.tv.TvHomeScreen() else HomeScreen() }
+                        composable("movie/{id}", listOf(navArgument("id") { type = NavType.IntType })) {
+                            com.mk.iptv.ui.tv.TvMovieScreen(it.arguments?.getInt("id") ?: 0)
+                        }
                         composable("search") { SearchScreen() }
                         composable("playlists") { PlaylistsScreen() }
                         composable("series/{id}", listOf(navArgument("id") { type = NavType.IntType })) {
-                            SeriesDetailScreen(it.arguments?.getInt("id") ?: 0)
+                            val id = it.arguments?.getInt("id") ?: 0
+                            if (tv) com.mk.iptv.ui.tv.TvSeriesScreen(id) else SeriesDetailScreen(id)
                         }
                         composable("category/{type}/{cat}/{title}") {
                             CategoryScreen(
@@ -80,6 +88,7 @@ class MainActivity : AppCompatActivity() {
                             ProfileEditorScreen(it.arguments?.getString("id")?.ifBlank { null })
                         }
                     }
+                    com.mk.iptv.update.UpdateDialogHost()
                 }
             }
         }
@@ -88,6 +97,12 @@ class MainActivity : AppCompatActivity() {
     override fun onStop() {
         super.onStop()
         MkApp.graph.store.flushBlocking()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Back from "Install unknown apps" settings: continue the pending update.
+        lifecycleScope.launch { MkApp.graph.updates.resumeAfterPermission() }
     }
 
     private fun dec(s: String?) = URLDecoder.decode(s.orEmpty(), "UTF-8")

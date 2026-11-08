@@ -97,9 +97,7 @@ fun LiveScreen(catalog: Catalog, session: Session) {
 
     // Inline preview player
     val player = remember {
-        ExoPlayer.Builder(ctx)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(MkApp.graph.downloads.upstream))
-            .build().apply { volume = 1f }
+        com.mk.iptv.player.Players.build(ctx, MkApp.graph.downloads.upstream, preview = true).apply { volume = 1f }
     }
     var muted by remember { mutableStateOf(false) }
     var buffering by remember { mutableStateOf(false) }
@@ -109,11 +107,12 @@ fun LiveScreen(catalog: Catalog, session: Session) {
         val l = object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) { buffering = state == Player.STATE_BUFFERING }
             override fun onPlayerError(e: PlaybackException) {
-                // Retry once with the MPEG-TS URL many panels prefer.
+                // Retry once with the other format (MPEG-TS <-> HLS).
                 val ch = selected
                 val cur = player.currentMediaItem?.localConfiguration?.uri?.toString().orEmpty()
-                if (ch != null && cur.endsWith(".m3u8")) {
-                    player.setMediaItem(MediaItem.fromUri(XtreamApi.liveUrl(MkApp.graph.catalog.creds(pl), ch.id, "ts"))); player.prepare(); player.play()
+                val first = liveFormats(session).first()
+                if (ch != null && cur.endsWith(".$first")) {
+                    player.setMediaItem(liveItem(XtreamApi.liveUrl(MkApp.graph.catalog.creds(pl), ch.id, liveFormats(session).last()))); player.prepare(); player.play()
                 } else error = "This channel is not available right now"
             }
         }
@@ -128,7 +127,7 @@ fun LiveScreen(catalog: Catalog, session: Session) {
     LaunchedEffect(selected?.id) {
         val ch = selected ?: return@LaunchedEffect
         error = null
-        player.setMediaItem(MediaItem.fromUri(XtreamApi.liveUrl(MkApp.graph.catalog.creds(pl), ch.id, "m3u8")))
+        player.setMediaItem(liveItem(XtreamApi.liveUrl(MkApp.graph.catalog.creds(pl), ch.id, liveFormats(session).first())))
         player.prepare()
         player.playWhenReady = true
     }
@@ -252,7 +251,7 @@ private fun ChannelRow(ch: LiveChannel, selected: Boolean, fav: Boolean, onClick
                 if (selected) Modifier.liquidGlass(RoundedCornerShape(22.dp)).border(1.5.dp, Mk.Accent.copy(alpha = .5f), RoundedCornerShape(22.dp))
                 else Modifier.clip(RoundedCornerShape(22.dp)).background(Color.White.copy(alpha = .04f))
             )
-            .tap(onClick)
+            .tap(onClick = onClick)
             .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -279,7 +278,7 @@ private fun ChannelRow(ch: LiveChannel, selected: Boolean, fav: Boolean, onClick
         Icon(
             if (fav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, "Favorite",
             tint = if (fav) Mk.Pink else Color.White.copy(alpha = .4f),
-            modifier = Modifier.padding(start = 8.dp).size(22.dp).tap(onFav),
+            modifier = Modifier.padding(start = 8.dp).size(22.dp).tap(onClick = onFav),
         )
     }
 }
@@ -305,3 +304,11 @@ private fun NowNextPanel(ch: LiveChannel) {
         }
     }
 }
+
+
+/** Preferred order of live formats: MPEG-TS first ("Fastest") or HLS first. */
+fun liveFormats(session: Session) = if (session.data.settings.liveFormat == "hls") listOf("m3u8", "ts") else listOf("ts", "m3u8")
+
+private fun liveItem(url: String): MediaItem = MediaItem.Builder().setUri(url)
+    .apply { if (url.endsWith(".m3u8")) setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8) }
+    .build()

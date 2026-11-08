@@ -125,7 +125,7 @@ private fun DownloadGroupCard(g: DownloadGroup, onClick: () -> Unit, onDelete: (
             .padding(horizontal = 16.dp, vertical = 6.dp)
             .fillMaxWidth()
             .liquidGlass(RoundedCornerShape(24.dp))
-            .tap(onClick)
+            .tap(onClick = onClick)
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -248,7 +248,7 @@ fun DownloadedSeriesScreen(groupKey: String) {
 private fun DownloadedEpisodeRow(e: DownloadEntry, fallback: String?, onPlay: () -> Unit) {
     val progress = rememberSession().data.let { d -> d.progress[sessionOf(d).profileId]?.get("ep:${e.id.substringAfterLast(':')}") }
     Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(132.dp, 74.dp).tap(onPlay)) {
+        Box(Modifier.size(132.dp, 74.dp).tap(onClick = onPlay)) {
             Poster(e.meta.image ?: fallback, e.meta.title, Modifier.fillMaxSize(), corner = 12.dp)
             if (e.completed) Box(Modifier.align(Alignment.Center).size(32.dp).glass(CircleShape).background(Color.Black.copy(alpha = .25f), CircleShape), contentAlignment = Alignment.Center) {
                 Icon(Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(18.dp))
@@ -257,7 +257,7 @@ private fun DownloadedEpisodeRow(e: DownloadEntry, fallback: String?, onPlay: ()
             else progress?.let { p -> if (p.fraction > 0) Box(Modifier.align(Alignment.BottomCenter).padding(horizontal = 6.dp, vertical = 5.dp)) { ProgressLine(p.fraction, height = 3.dp) } }
         }
         Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f).tap(onPlay)) {
+        Column(Modifier.weight(1f).tap(onClick = onPlay)) {
             Text("E${e.meta.episode ?: "?"} · ${e.meta.title}", color = Mk.Text, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(3.dp))
             val status = when {

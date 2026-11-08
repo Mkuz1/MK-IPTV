@@ -67,12 +67,25 @@ data class AppData(
     val progress: Map<String, Map<String, Progress>> = emptyMap(),
     /** profileId -> ("vod:id" / "series:id" -> time it was removed from Continue Watching) */
     val dismissed: Map<String, Map<String, Long>> = emptyMap(),
+    val settings: AppSettings = AppSettings(),
+)
+
+@Serializable
+data class AppSettings(
+    /** "auto" = MPEG-TS first (fastest zapping on Xtream) with HLS fallback; "hls" = HLS first. */
+    val liveFormat: String = "auto",
+    /** Override for the update feed (version.json). Null = built-in default. */
+    val updateUrl: String? = null,
+    val autoCheckUpdates: Boolean = true,
+    val lastUpdateCheck: Long = 0,
 )
 
 /* ---------------- Catalog (from Xtream) ---------------- */
 
+@Serializable
 data class Category(val id: String, val name: String)
 
+@Serializable
 data class VodItem(
     val id: Int,
     val name: String,
@@ -83,6 +96,7 @@ data class VodItem(
     val ext: String,
 )
 
+@Serializable
 data class SeriesItem(
     val id: Int,
     val name: String,
@@ -97,6 +111,7 @@ data class SeriesItem(
     val cast: String?,
 )
 
+@Serializable
 data class LiveChannel(
     val id: Int,
     val num: Int,
@@ -163,6 +178,23 @@ data class Catalog(
     val liveById: Map<Int, LiveChannel> by lazy { live.associateBy { it.id } }
     fun vodCategoryName(id: String?) = vodCategories.firstOrNull { it.id == id }?.name
     fun seriesCategoryName(id: String?) = seriesCategories.firstOrNull { it.id == id }?.name
+}
+
+/** Serializable copy of a [Catalog], cached on disk for instant start-up. */
+@Serializable
+data class CatalogSnapshot(
+    val liveCategories: List<Category>,
+    val live: List<LiveChannel>,
+    val vodCategories: List<Category>,
+    val vod: List<VodItem>,
+    val seriesCategories: List<Category>,
+    val series: List<SeriesItem>,
+    val loadedAt: Long,
+) {
+    fun toCatalog() = Catalog(liveCategories, live, vodCategories, vod, seriesCategories, series, loadedAt)
+    companion object {
+        fun of(c: Catalog) = CatalogSnapshot(c.liveCategories, c.live, c.vodCategories, c.vod, c.seriesCategories, c.series, c.loadedAt)
+    }
 }
 
 sealed interface CatalogState {

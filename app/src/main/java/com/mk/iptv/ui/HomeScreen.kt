@@ -95,8 +95,9 @@ fun HomeScreen() {
 
     LaunchedEffect(session.playlist?.id) { session.playlist?.id?.let { MkApp.graph.catalog.load(it) } }
 
+    val rail = widthClass() == WidthClass.EXPANDED
     Box(Modifier.fillMaxSize().background(Mk.Bg)) {
-        Box(Modifier.fillMaxSize().haze(hazeState)) {
+        Box(Modifier.fillMaxSize().padding(start = if (rail) 104.dp else 0.dp).haze(hazeState)) {
             holder.SaveableStateProvider(tab.name) {
                 when (tab) {
                     Tab.LIVE -> CatalogGate(catalogState, session) { LiveScreen(it, session) }
@@ -108,7 +109,8 @@ fun HomeScreen() {
             }
         }
         CompositionLocalProvider(LocalHaze provides hazeState) {
-            TabBar(tab, { tab = it }, Modifier.align(Alignment.BottomCenter))
+            if (rail) NavRail(tab, { tab = it }, Modifier.align(Alignment.CenterStart))
+            else TabBar(tab, { tab = it }, Modifier.align(Alignment.BottomCenter))
         }
     }
     preview?.let { PreviewSheet(it, session) { preview = null } }
@@ -145,6 +147,43 @@ private fun TabBar(current: Tab, onSelect: (Tab) -> Unit, modifier: Modifier = M
             }
         }
     }
+}
+
+/** Tablets / large screens: floating glass navigation rail on the left. */
+@Composable
+private fun NavRail(current: Tab, onSelect: (Tab) -> Unit, modifier: Modifier = Modifier) {
+    Column(
+        modifier
+            .padding(start = 14.dp)
+            .width(80.dp)
+            .liquidGlass(RoundedCornerShape(40.dp))
+            .padding(vertical = 14.dp, horizontal = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Tab.entries.forEach { t ->
+            val on = t == current
+            val color by animateColorAsState(if (on) Color(0xFF9FD3FF) else Color.White.copy(alpha = .75f), label = "rail")
+            Column(
+                Modifier.fillMaxWidth().height(66.dp)
+                    .then(if (on) Modifier.glass(RoundedCornerShape(26.dp), strength = 1.3f) else Modifier)
+                    .tap(RoundedCornerShape(26.dp)) { onSelect(t) },
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+            ) {
+                Icon(t.icon, t.label, tint = color, modifier = Modifier.size(24.dp))
+                Spacer(Modifier.height(3.dp))
+                Text(t.label, color = color, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            }
+        }
+    }
+}
+
+/** Poster size per window class: bigger artwork on tablets and unfolded foldables. */
+@Composable
+fun posterSize(): Pair<androidx.compose.ui.unit.Dp, androidx.compose.ui.unit.Dp> = when (widthClass()) {
+    WidthClass.EXPANDED -> 150.dp to 224.dp
+    WidthClass.MEDIUM -> 132.dp to 196.dp
+    WidthClass.COMPACT -> 114.dp to 170.dp
 }
 
 @Composable
@@ -377,8 +416,8 @@ private fun Hero(hero: Any?, movies: Boolean, catalog: Catalog, session: Session
 @Composable
 private fun PosterTile(item: Any, onPreview: (PreviewTarget) -> Unit) {
     when (item) {
-        is VodItem -> Poster(item.poster, item.name, Modifier.size(114.dp, 170.dp).tap { onPreview(PreviewTarget.Movie(item)) })
-        is SeriesItem -> Poster(item.cover, item.name, Modifier.size(114.dp, 170.dp).tap { onPreview(PreviewTarget.Series(item)) })
+        is VodItem -> { val (w, h) = posterSize(); Poster(item.poster, item.name, Modifier.size(w, h).tap { onPreview(PreviewTarget.Movie(item)) }) }
+        is SeriesItem -> { val (w, h) = posterSize(); Poster(item.cover, item.name, Modifier.size(w, h).tap { onPreview(PreviewTarget.Series(item)) }) }
     }
 }
 
@@ -501,5 +540,5 @@ fun CategoryScreen(type: String, catId: String, title: String) {
             }
         }
     }
-    preview?.let { PreviewSheet(it, session) { preview = null } }
+    preview?.let { if (actions.openDetail(it)) preview = null else PreviewSheet(it, session) { preview = null } }
 }

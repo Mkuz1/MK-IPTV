@@ -9,6 +9,9 @@ import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.swipeDown
 import androidx.test.core.app.ActivityScenario
@@ -47,6 +50,7 @@ import java.io.File
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @LooperMode(LooperMode.Mode.PAUSED)
 @Config(sdk = [34], qualifiers = "w412dp-h915dp-xhdpi")
+@OptIn(androidx.compose.ui.test.ExperimentalTestApi::class)
 class AppFlowScreenshotTest {
     @get:Rule val compose = createEmptyComposeRule()
     private lateinit var server: MockWebServer
@@ -117,6 +121,86 @@ class AppFlowScreenshotTest {
     /** Unfolded foldable inner display (e.g. Galaxy Z Fold / Pixel Fold): two-pane & grid layouts. */
     @Test @Config(qualifiers = "w840dp-h900dp-xhdpi")
     fun unfoldedFlow() = runFlow("fold-")
+
+    /** Tablet (e.g. 12" in landscape): navigation rail + large artwork. */
+    @Test @Config(qualifiers = "w1280dp-h800dp-xhdpi")
+    fun tabletFlow() = runFlow("tab-")
+
+    /** Google TV: D-pad driven 10-foot UI. */
+    @Test @Config(qualifiers = "w960dp-h540dp-land-television-xhdpi")
+    fun tvFlow() {
+        prefix = "tv-"
+        val scenario = ActivityScenario.launch(MainActivity::class.java)
+        settle(800)
+        shot("01-profiles")
+        click("MK")
+        waitFor { graph.catalog.state.value is CatalogState.Ready }
+        settle(12000)
+        shot("02-movies")
+        // Remote: move from the menu into the rows; the hero follows the focused card.
+        fun remote(code: Int) {
+            scenario.onActivity { a ->
+                a.dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, code))
+                a.dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, code))
+            }
+            settle(700)
+        }
+        remote(android.view.KeyEvent.KEYCODE_DPAD_DOWN)   // menu: Movies -> Series -> back up
+        remote(android.view.KeyEvent.KEYCODE_DPAD_UP)
+        remote(android.view.KeyEvent.KEYCODE_DPAD_RIGHT)  // into the rows
+        remote(android.view.KeyEvent.KEYCODE_DPAD_DOWN)   // My List row
+        remote(android.view.KeyEvent.KEYCODE_DPAD_RIGHT)  // second card
+        settle(4000)
+        shot("03-movies-focus")
+        clickDesc("Velvet Static")
+        settle(5000)
+        shot("04-movie-detail")
+        Espresso.pressBack()
+        settle(1000)
+        click("Series")
+        settle(8000)
+        shot("05-series")
+        compose.onAllNodesWithContentDescription("Overcast").onLast().performClick()
+        settle(8000)
+        shot("06-series-detail")
+        Espresso.pressBack()
+        settle(1000)
+        click("Live TV")
+        settle(5000)
+        shot("07-live")
+        scenario.close()
+    }
+
+    @Test @Config(qualifiers = "w960dp-h540dp-land-television-xhdpi")
+    fun tvPlayerRemote() {
+        kotlinx.coroutines.runBlocking { graph.catalog.load("home") }
+        val pl = graph.store.playlist("home")!!
+        val vods = graph.catalog.current!!.vod
+        val ctx = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        val scenario = ActivityScenario.launch<PlayerActivity>(PlayerActivity.intent(ctx, PlayQueue(listOf(Playback.movieItem(pl, vods[0]), Playback.movieItem(pl, vods[2])), 0)))
+        settle(1000)
+        scenario.onActivity { a ->
+            fun key(code: Int) = a.dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, code))
+            a.controlsVisible.value = false
+            val before = a.position.longValue
+            assertTrue(key(android.view.KeyEvent.KEYCODE_DPAD_RIGHT))          // seek +10 s
+            assertEquals(before + 10_000, a.position.longValue)
+            assertTrue(!a.controlsVisible.value && a.seekOsd.longValue > 0)
+            assertTrue(key(android.view.KeyEvent.KEYCODE_DPAD_CENTER))         // OK shows controls
+            assertTrue(a.controlsVisible.value)
+            assertTrue(key(android.view.KeyEvent.KEYCODE_BACK))                // Back hides them first
+            assertTrue(!a.controlsVisible.value)
+            assertTrue(key(android.view.KeyEvent.KEYCODE_MEDIA_NEXT))          // remote "next"
+            assertEquals(1, a.index.intValue)
+            a.controlsVisible.value = true
+            a.error.value = null; a.buffering.value = false
+            a.duration.longValue = 7_440_000; a.position.longValue = 2_960_000
+        }
+        settle(600)
+        prefix = "tv-"
+        shot("08-player")
+        scenario.close()
+    }
 
     private fun runFlow(prefix: String) {
         this.prefix = prefix
@@ -212,7 +296,7 @@ class AppFlowScreenshotTest {
         // Playlists moved out of the tab bar: header playlist button -> Manage playlists…
         click("Home Server")
         settle(600)
-        click("Manage playlists…")
+        click("Settings & playlists…")
         settle(1500)
         shot("11-playlists")
 

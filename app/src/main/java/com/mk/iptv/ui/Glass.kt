@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -143,10 +144,21 @@ fun Modifier.pressScale(source: MutableInteractionSource): Modifier {
     return this.scale(if (pressed) .95f else 1f)
 }
 
+/**
+ * Click / tap with press feedback, plus a clear focus ring for D-pad, TV remotes and keyboards
+ * (Google TV, tablets with keyboards, Chromebooks).
+ */
 @Composable
-fun Modifier.tap(onClick: () -> Unit): Modifier {
+fun Modifier.tap(focusShape: Shape = RoundedCornerShape(14.dp), onClick: () -> Unit): Modifier {
     val src = remember { MutableInteractionSource() }
-    return this.pressScale(src).clickable(interactionSource = src, indication = null, onClick = onClick)
+    val focused by src.collectIsFocusedAsState()
+    return this
+        .then(
+            if (focused) Modifier.background(Color.White.copy(alpha = .10f), focusShape).border(2.5.dp, Color.White, focusShape)
+            else Modifier
+        )
+        .pressScale(src)
+        .clickable(interactionSource = src, indication = null, onClick = onClick)
 }
 
 /* ---------------- Components ---------------- */
@@ -166,7 +178,7 @@ fun GlassIconButton(
         modifier
             .size(size)
             .then(if (blur) Modifier.liquidGlass(CircleShape) else Modifier.glass(CircleShape))
-            .tap(onClick),
+            .tap(CircleShape, onClick),
         contentAlignment = Alignment.Center,
     ) { Icon(icon, contentDescription, tint = tint, modifier = Modifier.size(iconSize)) }
 }
@@ -189,7 +201,7 @@ fun GlassChip(
                 if (selected) Modifier.clip(shape).background(Color.White.copy(alpha = .93f))
                 else Modifier.liquidGlass(shape)
             )
-            .tap(onClick)
+            .tap(shape, onClick)
             .padding(horizontal = 15.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -216,7 +228,7 @@ fun PrimaryButton(
             .height(height)
             .clip(RoundedCornerShape(50))
             .background(Color.White.copy(alpha = if (enabled) .95f else .4f))
-            .then(if (enabled && !loading) Modifier.tap(onClick) else Modifier)
+            .then(if (enabled && !loading) Modifier.tap(RoundedCornerShape(50), onClick) else Modifier)
             .padding(horizontal = 22.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
@@ -241,7 +253,7 @@ fun GlassButton(
         modifier
             .height(height)
             .liquidGlass(RoundedCornerShape(50))
-            .tap(onClick)
+            .tap(RoundedCornerShape(50), onClick)
             .padding(horizontal = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
@@ -294,7 +306,7 @@ fun SectionTitle(title: String, modifier: Modifier = Modifier, action: String? =
     ) {
         Text(title, color = Mk.Text, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (action != null && onAction != null) {
-            Text(action, color = Mk.Sub, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.tap(onAction))
+            Text(action, color = Mk.Sub, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.tap(onClick = onAction))
         }
     }
 }

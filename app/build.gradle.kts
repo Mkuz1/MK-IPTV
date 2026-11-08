@@ -20,8 +20,10 @@ android {
         applicationId = "com.mk.iptv"
         minSdk = 24
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.2.0"
+        versionCode = 4
+        versionName = "1.3.0"
+        // In-app update feed. Publish version.json + the APK as assets of a release in a PUBLIC repo.
+        buildConfigField("String", "UPDATE_URL", "\"https://github.com/mkuz1/mk-iptv-releases/releases/latest/download/version.json\"")
     }
 
     signingConfigs {
@@ -104,6 +106,7 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    testImplementation("com.squareup.okhttp3:okhttp-tls:4.12.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     testImplementation("org.robolectric:robolectric:4.14.1")
     testImplementation("io.github.takahirom.roborazzi:roborazzi:1.32.2")

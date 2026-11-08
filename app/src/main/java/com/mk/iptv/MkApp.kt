@@ -42,14 +42,18 @@ class MkApp : Application(), ImageLoaderFactory {
 
 class AppGraph(app: Application) {
     val http: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
+        // One shared client: API calls, images and video reuse warm connections to the provider.
+        .connectionPool(okhttp3.ConnectionPool(16, 5, TimeUnit.MINUTES))
+        .dispatcher(okhttp3.Dispatcher().apply { maxRequests = 64; maxRequestsPerHost = 16 })
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
         .followRedirects(true)
         .followSslRedirects(true)
         .retryOnConnectionFailure(true)
         .build()
     val store = LocalStore(app.filesDir)
     val api = XtreamApi(http)
-    val catalog = CatalogRepository(api, store)
+    val catalog = CatalogRepository(api, store, app.filesDir)
+    val updates = com.mk.iptv.update.UpdateManager(app, http)
     val downloads = DownloadsRepository(app, http) { id -> store.playlist(id)?.let { catalog.creds(it) } }
 }

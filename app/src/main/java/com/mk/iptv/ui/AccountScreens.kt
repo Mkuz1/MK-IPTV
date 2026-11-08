@@ -63,6 +63,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -167,7 +168,7 @@ private fun ProfileTile(p: Profile, playlistName: String?, current: Boolean, man
             .height(196.dp)
             .then(if (current) Modifier.border(3.dp, Mk.Accent.copy(alpha = .5f), RoundedCornerShape(30.dp)) else Modifier)
             .glass(RoundedCornerShape(30.dp))
-            .tap(onClick),
+            .tap(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -276,8 +277,8 @@ fun PlaylistsScreen() {
                     GlassIconButton(Icons.AutoMirrored.Rounded.ArrowBack, { actions.back() }, blur = false, contentDescription = "Back")
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("Playlists", style = TitleStyle, fontSize = 30.sp)
-                        Text("Xtream Codes accounts on this device", color = Mk.Sub, fontSize = 13.sp)
+                        Text("Settings", style = TitleStyle, fontSize = 30.sp)
+                        Text("Playlists, profiles, playback & updates", color = Mk.Sub, fontSize = 13.sp)
                     }
                     GlassIconButton(Icons.Rounded.Add, { actions.playlistEditor(null) }, tint = Mk.Accent, blur = false, contentDescription = "Add playlist")
                 }
@@ -316,6 +317,8 @@ fun PlaylistsScreen() {
                     }
                 }
             } }
+            item(span = { GridItemSpan(maxLineSpan) }) { PlaybackSettings(session) }
+            item(span = { GridItemSpan(maxLineSpan) }) { UpdateSettings(session) }
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Text(
                     "MK IPTV ${com.mk.iptv.BuildConfig.VERSION_NAME} · Passwords are encrypted on this device.\nCast to Chromecast & Google TV, or AirPlay to Apple TV from the player.",
@@ -342,7 +345,7 @@ private val dateFmt = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
 @Composable
 private fun PlaylistCard(pl: Playlist, inUse: Boolean, onUse: () -> Unit, onRefresh: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
-    GlassCard(Modifier.padding(horizontal = 16.dp, vertical = 7.dp).fillMaxWidth().tap(onUse), highlighted = inUse) {
+    GlassCard(Modifier.padding(horizontal = 16.dp, vertical = 7.dp).fillMaxWidth().tap(onClick = onUse), highlighted = inUse) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(46.dp).clip(RoundedCornerShape(15.dp)).background(androidx.compose.ui.graphics.Brush.linearGradient(Mk.avatar(pl.name.length))), contentAlignment = Alignment.Center) {
                 Icon(Icons.Rounded.Dns, null, tint = Color.White)
@@ -600,6 +603,66 @@ fun ToggleCard(items: List<Triple<String, Boolean, (Boolean) -> Unit>>) {
                 Text(label, color = Mk.Text, fontSize = 14.5.sp, modifier = Modifier.weight(1f))
                 Switch(on, set, colors = SwitchDefaults.colors(checkedTrackColor = Mk.Green, checkedThumbColor = Color.White, uncheckedTrackColor = Color.White.copy(alpha = .18f), uncheckedBorderColor = Color.Transparent, uncheckedThumbColor = Color.White))
             }
+        }
+    }
+}
+
+
+/* ---------------- Settings sections ---------------- */
+
+@Composable
+private fun PlaybackSettings(session: Session) {
+    Column {
+        SectionTitle("Playback")
+        Column(Modifier.padding(horizontal = 16.dp).fillMaxWidth().glass(RoundedCornerShape(22.dp)).padding(16.dp)) {
+            Text("Live TV stream format", color = Mk.Text, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold)
+            Text("Fastest = MPEG-TS first (quickest channel switching on most Xtream servers), with automatic HLS fallback.", color = Mk.Sub, fontSize = 12.sp, lineHeight = 16.sp)
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                val f = session.data.settings.liveFormat
+                GlassChip("Fastest (TS)", f == "auto", { MkApp.graph.store.updateSettings { it.copy(liveFormat = "auto") } })
+                GlassChip("HLS (m3u8)", f == "hls", { MkApp.graph.store.updateSettings { it.copy(liveFormat = "hls") } })
+            }
+        }
+    }
+}
+
+@Composable
+private fun UpdateSettings(session: Session) {
+    val mgr = MkApp.graph.updates
+    val state by mgr.state.collectAsState()
+    val scope = rememberCoroutineScope()
+    var url by remember { mutableStateOf(session.data.settings.updateUrl ?: "") }
+    Column {
+        SectionTitle("App updates")
+        Column(Modifier.padding(horizontal = 16.dp).fillMaxWidth().glass(RoundedCornerShape(22.dp)).padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("MK IPTV ${com.mk.iptv.BuildConfig.VERSION_NAME}", color = Mk.Text, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    val status = when (val s = state) {
+                        is com.mk.iptv.update.UpdateState.Checking -> "Checking…" to Mk.Sub
+                        is com.mk.iptv.update.UpdateState.UpToDate -> "You're up to date" to Mk.Green
+                        is com.mk.iptv.update.UpdateState.Available -> "Version ${s.info.versionName} is available" to Mk.Accent
+                        is com.mk.iptv.update.UpdateState.Downloading -> "Downloading ${(s.progress * 100).toInt()}%" to Mk.Accent
+                        is com.mk.iptv.update.UpdateState.Installing -> "Installing…" to Mk.Accent
+                        is com.mk.iptv.update.UpdateState.NeedsPermission -> "Waiting for install permission" to Mk.Gold
+                        is com.mk.iptv.update.UpdateState.Failed -> s.message to Mk.Live
+                        else -> (session.data.settings.lastUpdateCheck.takeIf { it > 0 }?.let { "Last checked ${ago(it)}" } ?: "Not checked yet") to Mk.Sub
+                    }
+                    Text(status.first, color = status.second, fontSize = 12.5.sp, maxLines = 2)
+                }
+                val avail = state as? com.mk.iptv.update.UpdateState.Available
+                PrimaryButton(
+                    if (avail != null) "Update" else "Check now",
+                    { scope.launch { if (avail != null) mgr.downloadAndInstall(avail.info) else mgr.check() } },
+                    icon = if (avail != null) Icons.Rounded.Bolt else Icons.Rounded.Refresh,
+                    loading = state is com.mk.iptv.update.UpdateState.Checking, height = 44.dp,
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            ToggleCard(listOf(Triple("Check for updates automatically", session.data.settings.autoCheckUpdates) { v: Boolean -> MkApp.graph.store.updateSettings { it.copy(autoCheckUpdates = v) } }))
+            Spacer(Modifier.height(10.dp))
+            GlassField("Update feed (advanced)", url, { url = it; MkApp.graph.store.updateSettings { st -> st.copy(updateUrl = it.trim().ifBlank { null }) } }, icon = Icons.Rounded.Link, placeholder = com.mk.iptv.BuildConfig.UPDATE_URL, keyboard = KeyboardType.Uri)
         }
     }
 }

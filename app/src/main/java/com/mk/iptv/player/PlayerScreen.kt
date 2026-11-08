@@ -63,6 +63,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -93,13 +94,15 @@ fun PlayerScreen(a: PlayerActivity) {
     val airplay = a.airplay.value
     val remote = casting || airplay != null
     val live = item?.kind == "live"
-    var visible by remember { mutableStateOf(true) }
+    var visible by a.controlsVisible
+    val tv = remember { Device.isTv(a) }
+    val playFocus = remember { androidx.compose.ui.focus.FocusRequester() }
     var locked by remember { mutableStateOf(false) }
     var sheet by remember { mutableStateOf(Sheet.NONE) }
     var resize by remember { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
     var scrubbing by remember { mutableStateOf(false) }
     var scrubValue by remember { mutableFloatStateOf(0f) }
-    var interaction by remember { mutableIntStateOf(0) }
+    var interaction by a.interaction
     val playing = if (airplay != null) a.airplayPlaying.value else a.isPlaying.value
 
     // auto-hide controls
@@ -145,6 +148,19 @@ fun PlayerScreen(a: PlayerActivity) {
         }
 
         if (a.inPip.value) return@Box
+
+        // TV: when the controls appear, put focus on Play/Pause so the remote works immediately.
+        LaunchedEffect(visible, locked) { if (tv && visible && !locked) { kotlinx.coroutines.delay(80); runCatching { playFocus.requestFocus() } } }
+
+        // TV remote seek feedback while the controls are hidden.
+        if (!visible && a.seekOsd.longValue > 0) {
+            val dur = a.duration.longValue
+            Column(Modifier.align(Alignment.BottomCenter).padding(horizontal = 48.dp, vertical = 28.dp).fillMaxWidth()) {
+                Text(fmt(a.position.longValue) + if (dur > 0) " / " + fmt(dur) else "", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Spacer(Modifier.height(8.dp))
+                if (dur > 0) com.mk.iptv.ui.ProgressLine((a.position.longValue.toFloat() / dur), height = 5.dp)
+            }
+        }
 
         // Tap layer
         Box(
@@ -195,9 +211,11 @@ fun PlayerScreen(a: PlayerActivity) {
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             BarIcon(Icons.Rounded.ClosedCaption) { sheet = Sheet.TRACKS; bump() }
-                            Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) { CastRouteButton(Modifier.size(44.dp)) }
-                            BarIcon(Icons.Rounded.Airplay, tint = if (airplay != null) Mk.Accent else Color.White) { sheet = Sheet.AIRPLAY; bump() }
-                            if (!remote) BarIcon(Icons.Rounded.PictureInPictureAlt) { a.enterPip() }
+                            if (!tv) {
+                                Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) { CastRouteButton(Modifier.size(44.dp)) }
+                                BarIcon(Icons.Rounded.Airplay, tint = if (airplay != null) Mk.Accent else Color.White) { sheet = Sheet.AIRPLAY; bump() }
+                                if (!remote) BarIcon(Icons.Rounded.PictureInPictureAlt) { a.enterPip() }
+                            }
                             if (!remote) BarIcon(Icons.Rounded.AspectRatio) {
                                 resize = when (resize) {
                                     AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
@@ -218,7 +236,7 @@ fun PlayerScreen(a: PlayerActivity) {
                             }, size = 64.dp, iconSize = 30.dp, blur = false)
                         }
                         Spacer(Modifier.width(48.dp))
-                        GlassIconButton(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, {
+                        GlassIconButton(modifier = Modifier.focusRequester(playFocus), icon = if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, onClick = {
                             if (airplay != null) a.airPlayToggle() else player?.let { if (it.isPlaying) it.pause() else it.play() }; bump()
                         }, size = 88.dp, iconSize = 42.dp, blur = false)
                         Spacer(Modifier.width(48.dp))
@@ -354,7 +372,7 @@ private fun SheetTitle(t: String) = Text(t, color = Color.White, fontWeight = Fo
 private fun OptionRow(label: String, selected: Boolean, icon: androidx.compose.ui.graphics.vector.ImageVector? = null, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).then(if (selected) Modifier.background(Color.White.copy(alpha = .1f)) else Modifier)
-            .tap(onClick).padding(horizontal = 12.dp, vertical = 11.dp),
+            .tap(onClick = onClick).padding(horizontal = 12.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         icon?.let { Icon(it, null, tint = Mk.Sub, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(10.dp)) }
@@ -365,14 +383,14 @@ private fun OptionRow(label: String, selected: Boolean, icon: androidx.compose.u
 
 @Composable
 private fun BarIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, tint: Color = Color.White, onClick: () -> Unit) {
-    Box(Modifier.size(44.dp).clip(CircleShape).tap(onClick), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(44.dp).clip(CircleShape).tap(CircleShape, onClick), contentAlignment = Alignment.Center) {
         Icon(icon, null, tint = tint, modifier = Modifier.size(22.dp))
     }
 }
 
 @Composable
 private fun BottomAction(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, tint: Color = Color.White, onClick: () -> Unit) {
-    Row(Modifier.clip(RoundedCornerShape(50)).tap(onClick).padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.clip(RoundedCornerShape(50)).tap(onClick = onClick).padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, null, tint = tint, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(7.dp))
         Text(label, color = tint.copy(alpha = .9f), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 220.dp))

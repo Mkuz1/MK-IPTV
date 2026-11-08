@@ -2,6 +2,7 @@ package com.mk.iptv.data
 
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -10,7 +11,26 @@ import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 
 /** Loads and caches the Xtream catalog of the active playlist. */
-class CatalogRepository(private val api: XtreamApi, private val store: LocalStore) {
+class CatalogRepository(private val api: XtreamApi, private val store: LocalStore, cacheRoot: java.io.File) {
+
+    private val diskDir = java.io.File(cacheRoot, "catalog").apply { mkdirs() }
+    private val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+    private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
+    @Volatile private var refreshing: String? = null
+
+    private fun diskFile(id: String) = java.io.File(diskDir, "$id.json.gz")
+
+    private fun readDisk(id: String): Catalog? = runCatching {
+        val f = diskFile(id)
+        if (!f.exists()) return null
+        java.util.zip.GZIPInputStream(f.inputStream().buffered()).use { json.decodeFromString(CatalogSnapshot.serializer(), it.readBytes().decodeToString()).toCatalog() }
+    }.getOrNull()
+
+    private fun writeDisk(id: String, c: Catalog) = runCatching {
+        val tmp = java.io.File(diskDir, "$id.tmp")
+        java.util.zip.GZIPOutputStream(tmp.outputStream().buffered()).use { it.write(json.encodeToString(CatalogSnapshot.serializer(), CatalogSnapshot.of(c)).toByteArray()) }
+        tmp.renameTo(diskFile(id))
+    }
 
     private val _state = MutableStateFlow<CatalogState>(CatalogState.Idle)
     val state: StateFlow<CatalogState> = _state.asStateFlow()
@@ -37,22 +57,25 @@ class CatalogRepository(private val api: XtreamApi, private val store: LocalStor
         if (!force && cached != null && System.currentTimeMillis() - cached.loadedAt < maxAge) {
             _state.value = CatalogState.Ready(cached); return@withLock
         }
+        // Instant start: show the on-disk copy right away and refresh it in the background.
+        if (!force && cached == null) {
+            val disk = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { readDisk(playlistId) }
+            if (disk != null) {
+                catalogs[playlistId] = disk
+                _state.value = CatalogState.Ready(disk)
+                if (System.currentTimeMillis() - disk.loadedAt > minOf(maxAge, 6 * 3600_000L)) refreshInBackground(playlistId)
+                return@withLock
+            }
+        }
         _state.value = CatalogState.Loading("Connecting to ${p.name}…")
         try {
             val c = creds(p)
             val auth = runCatching { api.authenticate(c) }.getOrNull()
             if (auth != null && !auth.ok) throw IllegalStateException(auth.message ?: "Login failed")
             _state.value = CatalogState.Loading("Loading channels, movies & series…")
-            val cat = coroutineScope {
-                val lc = async { runCatching { api.liveCategories(c) }.getOrDefault(emptyList()) }
-                val l = async { runCatching { api.liveStreams(c) }.getOrDefault(emptyList()) }
-                val vc = async { runCatching { api.vodCategories(c) }.getOrDefault(emptyList()) }
-                val v = async { runCatching { api.vodStreams(c) }.getOrDefault(emptyList()) }
-                val sc = async { runCatching { api.seriesCategories(c) }.getOrDefault(emptyList()) }
-                val s = async { runCatching { api.series(c) }.getOrDefault(emptyList()) }
-                Catalog(lc.await(), l.await(), vc.await(), v.await(), sc.await(), s.await(), System.currentTimeMillis())
-            }
+            val cat = fetchAll(c)
             catalogs[playlistId] = cat
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { writeDisk(playlistId, cat) }
             store.upsertPlaylist(
                 (store.playlist(playlistId) ?: p).copy(
                     lastSync = System.currentTimeMillis(),
@@ -69,8 +92,43 @@ class CatalogRepository(private val api: XtreamApi, private val store: LocalStor
         }
     }
 
+    private suspend fun fetchAll(c: Creds): Catalog = coroutineScope {
+        val lc = async { runCatching { api.liveCategories(c) }.getOrDefault(emptyList()) }
+        val l = async { runCatching { api.liveStreams(c) }.getOrDefault(emptyList()) }
+        val vc = async { runCatching { api.vodCategories(c) }.getOrDefault(emptyList()) }
+        val v = async { runCatching { api.vodStreams(c) }.getOrDefault(emptyList()) }
+        val sc = async { runCatching { api.seriesCategories(c) }.getOrDefault(emptyList()) }
+        val s = async { runCatching { api.series(c) }.getOrDefault(emptyList()) }
+        Catalog(lc.await(), l.await(), vc.await(), v.await(), sc.await(), s.await(), System.currentTimeMillis())
+    }
+
+    /** Silent refresh: the UI keeps showing the cached catalog until the fresh one is ready. */
+    private fun refreshInBackground(playlistId: String) {
+        if (refreshing == playlistId) return
+        refreshing = playlistId
+        scope.launch {
+            try {
+                val p = store.playlist(playlistId) ?: return@launch
+                val c = creds(p)
+                val auth = runCatching { api.authenticate(c) }.getOrNull()
+                if (auth != null && !auth.ok) return@launch
+                val cat = fetchAll(c)
+                if (cat.vod.isEmpty() && cat.series.isEmpty() && cat.live.isEmpty()) return@launch
+                writeDisk(playlistId, cat)
+                catalogs[playlistId] = cat
+                if (this@CatalogRepository.playlistId == playlistId) _state.value = CatalogState.Ready(cat)
+                store.upsertPlaylist((store.playlist(playlistId) ?: p).copy(
+                    lastSync = System.currentTimeMillis(), status = auth?.status ?: p.status, expiry = auth?.expiry ?: p.expiry,
+                    activeCons = auth?.activeCons ?: p.activeCons, maxCons = auth?.maxCons ?: p.maxCons,
+                    liveCount = cat.live.size, movieCount = cat.vod.size, seriesCount = cat.series.size,
+                ))
+            } finally { refreshing = null }
+        }
+    }
+
     fun clear(playlistId: String) {
         catalogs.remove(playlistId)
+        diskFile(playlistId).delete()
         if (this.playlistId == playlistId) { this.playlistId = null; _state.value = CatalogState.Idle }
     }
 
