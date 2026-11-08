@@ -1,0 +1,71 @@
+# One-click release: builds the signed APK + update feed and publishes them to the PUBLIC
+# repo that installed apps read updates from (mkuz1/mk-iptv-releases).
+#
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   KEYSTORE_BASE64    base64 of keystore/mk-iptv-release.jks   (base64 -w0 mk-iptv-release.jks)
+#   KEYSTORE_PASSWORD  storePassword from keystore.properties
+#   KEY_PASSWORD       keyPassword from keystore.properties
+#   RELEASES_TOKEN     fine-grained token with "Contents: Read and write" on mkuz1/mk-iptv-releases only
+name: Publish release
+
+on:
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: "What's new (shown in the in-app update dialog)"
+        required: true
+        default: "Bug fixes and improvements."
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      RELEASES_REPO: https://github.com/mkuz1/mk-iptv-releases
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Restore signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          mkdir -p keystore
+          echo "$KEYSTORE_BASE64" | base64 -d > keystore/mk-iptv-release.jks
+          {
+            echo "storeFile=keystore/mk-iptv-release.jks"
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyAlias=mkiptv"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > keystore.properties
+
+      - name: Test
+        run: ./gradlew -q :app:testDebugUnitTest --tests '*XtreamApiTest*' --tests '*ProgressTest*' --tests '*UpdateAndCacheTest*'
+
+      - name: Build APK + update feed
+        env:
+          NOTES: ${{ inputs.notes }}
+        run: tools/make-release.sh "$NOTES"
+
+      - name: Publish to the public releases repo
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          NOTES: ${{ inputs.notes }}
+        run: |
+          VERSION=$(python3 -c "import json;print(json.load(open('dist/version.json'))['versionName'])")
+          gh release create "v$VERSION" "dist/MK-IPTV-$VERSION.apk" dist/version.json \
+            --repo mkuz1/mk-iptv-releases --title "MK IPTV $VERSION" --notes "$NOTES" --latest
+
+      - name: Remove signing material
+        if: always()
+        run: rm -f keystore/mk-iptv-release.jks keystore.properties

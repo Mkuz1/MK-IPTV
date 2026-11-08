@@ -46,7 +46,15 @@ The app checks an update feed (`version.json`) at start-up (at most every 6 h) a
 3. Verifies the APK is signed with the **same MK IPTV certificate** as the installed app (and Android enforces this again).
 4. Installs it with Android's PackageInstaller. The first time, Android asks you to allow "Install unknown apps" for MK IPTV.
 
-### Publishing a release
+### Publishing a release (one click)
+
+After the one-time setup below, open **Actions → Publish release → Run workflow** in this repo, type the release notes and run it. The workflow tests, builds and signs the APK, writes `version.json` and publishes both to `mkuz1/mk-iptv-releases`. Bump `versionCode`/`versionName` first.
+
+One-time setup:
+1. Create the **public** repo `mkuz1/mk-iptv-releases` and add `tools/releases-repo/README.md` as its README.
+2. In this repo's *Settings → Secrets and variables → Actions*, add `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_PASSWORD` and `RELEASES_TOKEN` (see the top of `.github/workflows/publish-release.yml`).
+
+### Publishing a release manually
 
 The feed must be publicly reachable. The default is
 `https://github.com/mkuz1/mk-iptv-releases/releases/latest/download/version.json`
