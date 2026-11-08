@@ -1,0 +1,11 @@
+<resources>
+    <color name="mk_bg">#06070C</color>
+    <style name="Theme.MkIptv" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@color/mk_bg</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="colorPrimary">#7CC4FF</item>
+        <item name="colorAccent">#7CC4FF</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
