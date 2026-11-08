@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -195,7 +196,7 @@ fun GlassChip(
     ) {
         val c = if (selected) Color(0xFF0B0C12) else Color.White
         leading?.let { Icon(it, null, tint = c, modifier = Modifier.size(16.dp)) }
-        Text(text, color = c, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+        Text(text, color = c, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 220.dp))
         trailing?.let { Icon(it, null, tint = c, modifier = Modifier.size(16.dp)) }
     }
 }
@@ -378,3 +379,25 @@ fun initials(name: String): String {
         else -> words.take(2).joinToString("") { it.take(1) }.uppercase()
     }
 }
+
+/* ---------------- Adaptive layout (phones, foldables, tablets) ---------------- */
+
+enum class WidthClass { COMPACT, MEDIUM, EXPANDED }
+
+/** Window width class; re-evaluated on fold/unfold, rotation and multi-window resizes. */
+@Composable
+fun widthClass(): WidthClass {
+    val w = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
+    return when {
+        w >= 840 -> WidthClass.EXPANDED
+        w >= 600 -> WidthClass.MEDIUM
+        else -> WidthClass.COMPACT
+    }
+}
+
+@Composable
+fun isWide(): Boolean = widthClass() != WidthClass.COMPACT
+
+/** Two panes side by side (unfolded foldables / tablets in landscape, ≥ 720dp). */
+@Composable
+fun isTwoPane(): Boolean = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 720

@@ -87,7 +87,7 @@ fun SeriesDetailScreen(seriesId: Int) {
     }
 
     Box(Modifier.fillMaxSize().background(Mk.Bg)) {
-        LazyColumn(contentPadding = PaddingValues(bottom = 60.dp)) {
+        val infoItems: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {
             item {
                 Box(Modifier.fillMaxWidth().height(300.dp)) {
                     Poster(backdrop, title, Modifier.fillMaxSize(), corner = 0.dp)
@@ -154,6 +154,8 @@ fun SeriesDetailScreen(seriesId: Int) {
                     }
                 }
             }
+        }
+        val episodeItems: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {
             if (info == null) item {
                 if (failed) CenterMessage("Couldn't load episodes", icon = Icons.Rounded.CloudOff, action = "Retry", onAction = { reload++ }, modifier = Modifier.height(300.dp))
                 else CenterMessage("Loading episodes…", loading = true, modifier = Modifier.height(240.dp))
@@ -182,6 +184,16 @@ fun SeriesDetailScreen(seriesId: Int) {
                     )
                 }
             }
+        }
+        if (isTwoPane()) {
+            // Unfolded foldable / tablet: details on the left, seasons & episodes on the right.
+            Row(Modifier.fillMaxSize()) {
+                LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 60.dp)) { infoItems() }
+                LazyColumn(Modifier.weight(1f).statusBarsPadding(), contentPadding = PaddingValues(top = 56.dp, bottom = 60.dp)) { episodeItems() }
+            }
+        } else LazyColumn(contentPadding = PaddingValues(bottom = 60.dp)) {
+            infoItems()
+            episodeItems()
         }
         Row(Modifier.statusBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             GlassIconButton(Icons.AutoMirrored.Rounded.ArrowBack, { actions.back() }, blur = false)

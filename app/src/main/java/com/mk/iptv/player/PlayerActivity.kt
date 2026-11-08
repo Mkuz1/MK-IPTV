@@ -19,7 +19,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.window.layout.FoldingFeature
+import androidx.window.layout.WindowInfoTracker
 import androidx.media3.cast.CastPlayer
 import androidx.media3.cast.SessionAvailabilityListener
 import androidx.media3.common.C
@@ -83,6 +87,9 @@ class PlayerActivity : AppCompatActivity() {
     val inPip = mutableStateOf(false)
     val offline = mutableStateOf(false)
     val audioTracks = mutableStateOf<List<TrackOption>>(emptyList())
+    /** Hinge position (top, bottom in px) while a foldable is half-open with a horizontal fold ("tabletop"). */
+    val tabletopHinge = mutableStateOf<Pair<Int, Int>?>(null)
+    private var hasFold = false
     val textTracks = mutableStateOf<List<TrackOption>>(emptyList())
 
     // AirPlay
@@ -105,6 +112,19 @@ class PlayerActivity : AppCompatActivity() {
             window.attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
         hideSystemBars()
+        applyOrientationPolicy()
+        // Foldables: watch the hinge so we can switch to tabletop layout and stop forcing landscape.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                WindowInfoTracker.getOrCreate(this@PlayerActivity).windowLayoutInfo(this@PlayerActivity).collect { info ->
+                    val fold = info.displayFeatures.filterIsInstance<FoldingFeature>().firstOrNull()
+                    hasFold = hasFold || fold != null
+                    tabletopHinge.value = fold?.takeIf { it.state == FoldingFeature.State.HALF_OPENED && it.orientation == FoldingFeature.Orientation.HORIZONTAL }
+                        ?.bounds?.let { it.top to it.bottom }
+                    applyOrientationPolicy()
+                }
+            }
+        }
 
         val q = intent.getStringExtra("queue")?.let { runCatching { json.decodeFromString(PlayQueue.serializer(), it) }.getOrNull() }
         if (q == null || q.items.isEmpty()) { finish(); return }
@@ -416,6 +436,22 @@ class PlayerActivity : AppCompatActivity() {
         saveProgress()
         queue.value = q
         load(q.index, resume = true)
+    }
+
+    /**
+     * Regular phones: landscape for video. Foldables and large screens (unfolded, tablets, multi-window):
+     * follow the device so tabletop / book postures and the inner display work naturally.
+     */
+    private fun applyOrientationPolicy() {
+        val large = resources.configuration.smallestScreenWidthDp >= 600
+        val want = if (large || hasFold || (Build.VERSION.SDK_INT >= 24 && isInMultiWindowMode)) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        if (requestedOrientation != want) requestedOrientation = want
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        applyOrientationPolicy()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

@@ -95,11 +95,19 @@ class AppFlowScreenshotTest {
         }
     }
 
-    private fun shot(name: String) = captureScreenRoboImage(File(out, "$name.png").path)
+    private var prefix = ""
+    private fun shot(name: String) = captureScreenRoboImage(File(out, "$prefix$name.png").path)
     private fun click(text: String) = compose.onAllNodesWithText(text, substring = false).onFirst().performClick()
     private fun clickDesc(desc: String) = compose.onAllNodesWithContentDescription(desc).onFirst().performClick()
 
-    @Test fun fullFlow() {
+    @Test fun fullFlow() = runFlow("")
+
+    /** Unfolded foldable inner display (e.g. Galaxy Z Fold / Pixel Fold): two-pane & grid layouts. */
+    @Test @Config(qualifiers = "w840dp-h900dp-xhdpi")
+    fun unfoldedFlow() = runFlow("fold-")
+
+    private fun runFlow(prefix: String) {
+        this.prefix = prefix
         val scenario = ActivityScenario.launch(MainActivity::class.java)
         settle(800)
         shot("01-profiles")
@@ -131,17 +139,16 @@ class AppFlowScreenshotTest {
 
         // ---- real downloads through Media3 DownloadManager ----
         val pl = graph.store.playlist("home")!!
-        val c = graph.catalog.creds(pl)
         val dl = graph.downloads
         val overcast = graph.catalog.current!!.series.first { it.name == "Overcast" }
         listOf("71101" to 1, "71102" to 2, "71103" to 3, "71201" to 1).forEachIndexed { i, (epId, n) ->
             val s = if (i < 3) 1 else 2
             val id = DownloadsRepository.episodeId("home", epId)
-            dl.manager.addDownload(dl.requestFor(id, DownloadMeta("episode", "home", listOf("The Low Front", "Pressure", "The Drowned Bell", "The Low Front")[i], "${server.url("/img/")}${listOf("overcast", "salt", "north", "overcast")[i]}_wide.jpg", null, overcast.id, "Overcast", overcast.cover, s, n, url = XtreamApi.episodeUrl(c, epId, "mp4"))))
+            dl.manager.addDownload(dl.requestFor(id, DownloadMeta("episode", "home", listOf("The Low Front", "Pressure", "The Drowned Bell", "The Low Front")[i], "${server.url("/img/")}${listOf("overcast", "salt", "north", "overcast")[i]}_wide.jpg", null, overcast.id, "Overcast", overcast.cover, s, n, url = DownloadsRepository.episodeUrl("home", epId, "mp4"))))
         }
         graph.catalog.current!!.vod.take(3).forEachIndexed { i, v ->
             val id = DownloadsRepository.movieId("home", v.id)
-            val req = dl.requestFor(id, DownloadMeta("movie", "home", v.name, v.poster, url = XtreamApi.movieUrl(c, v.id, "mp4")))
+            val req = dl.requestFor(id, DownloadMeta("movie", "home", v.name, v.poster, url = DownloadsRepository.movieUrl("home", v.id, "mp4")))
             if (i == 2) dl.manager.addDownload(req, 1) else dl.manager.addDownload(req)
         }
         dl.manager.requirements = androidx.media3.exoplayer.scheduler.Requirements(0) // Robolectric has no active network
@@ -154,6 +161,16 @@ class AppFlowScreenshotTest {
         settle(1500)
         assertEquals(6, dl.entries.value.count { it.completed })
         assertTrue(dl.entries.value.first { it.completed && it.meta.kind == "movie" }.bytes >= 3_000_000)
+        // Security: credentials must never be persisted in the download database.
+        dl.manager.downloadIndex.getDownloads().use { cur ->
+            while (cur.moveToNext()) {
+                val r = cur.download.request
+                assertTrue("password leaked in ${r.uri}", !r.uri.toString().contains("secret") && !r.uri.toString().contains("/mk/"))
+                assertTrue("password leaked in metadata", !String(r.data).contains("secret"))
+            }
+        }
+        // ...but playback of a download still resolves to the real, authenticated URL.
+        assertTrue(Playback.downloadItems(dl.entries.value).first().url.contains("/mk/secret/"))
         shot("07-series-detail-offline")
 
         Espresso.pressBack()
@@ -180,6 +197,29 @@ class AppFlowScreenshotTest {
         clickDesc("Add playlist")
         settle(1200)
         shot("12-add-playlist")
+        scenario.close()
+    }
+
+    /** Foldable half-open on a table (horizontal hinge): video above the fold, controls below. */
+    @Test @Config(qualifiers = "w673dp-h841dp-xhdpi")
+    fun tabletopPlayer() {
+        kotlinx.coroutines.runBlocking { graph.catalog.load("home") }
+        val pl = graph.store.playlist("home")!!
+        val vods = graph.catalog.current!!.vod
+        val ctx = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        val scenario = ActivityScenario.launch<PlayerActivity>(PlayerActivity.intent(ctx, PlayQueue(listOf(Playback.movieItem(pl, vods[0]), Playback.movieItem(pl, vods[2])), 0)))
+        settle(1200)
+        scenario.onActivity { a ->
+            val h = a.window.decorView.height
+            a.tabletopHinge.value = (h / 2 - 8) to (h / 2 + 8)
+            a.error.value = null; a.buffering.value = false
+            a.duration.longValue = 7_440_000; a.position.longValue = 4_360_000
+            // Foldables are never locked to landscape.
+            assertEquals(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED, a.requestedOrientation)
+        }
+        settle(500)
+        prefix = "fold-"
+        shot("14-tabletop-player")
         scenario.close()
     }
 

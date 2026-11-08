@@ -16,6 +16,10 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -68,23 +72,23 @@ fun DownloadsScreen(session: Session) {
     var confirmDelete by remember { mutableStateOf<DownloadGroup?>(null) }
 
     AmbientBackground {
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 120.dp)) {
-            item { TabHeader("Downloads", session, showSearch = false) }
-            item {
+        LazyVerticalGrid(GridCells.Adaptive(360.dp), Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 120.dp)) {
+            item(span = { GridItemSpan(maxLineSpan) }) { TabHeader("Downloads", session, showSearch = false) }
+            item(span = { GridItemSpan(maxLineSpan) }) {
                 Row(Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     GlassChip("${formatBytes(used)} used · ${formatBytes(repo.freeSpace())} free", onClick = {}, leading = Icons.Rounded.SdStorage)
                     if (anyActive) GlassChip("Pause all", onClick = { repo.pauseAll() }, leading = Icons.Rounded.Pause)
                     else if (anyPaused) GlassChip("Resume all", onClick = { repo.resumeAll(); entries.filter { it.paused }.forEach { repo.resume(it.id) } }, leading = Icons.Rounded.PlayArrow)
                 }
             }
-            if (groups.isEmpty()) item {
+            if (groups.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
                 CenterMessage(
                     "No downloads yet",
                     "Tap the download button on any movie or episode to watch it offline — even on a plane.",
                     icon = Icons.Rounded.Download, modifier = Modifier.height(480.dp),
                 )
             }
-            items(groups, key = { it.key }) { g ->
+            gridItems(groups, key = { it.key }) { g ->
                 DownloadGroupCard(
                     g,
                     onClick = {
@@ -193,8 +197,8 @@ fun DownloadedSeriesScreen(groupKey: String) {
             return@Box
         }
         val bySeason = group.entries.groupBy { it.meta.season ?: 1 }.toSortedMap()
-        LazyColumn(contentPadding = PaddingValues(bottom = 40.dp)) {
-            item {
+        LazyVerticalGrid(GridCells.Adaptive(380.dp), contentPadding = PaddingValues(bottom = 40.dp)) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
                 Box(Modifier.fillMaxWidth().height(260.dp)) {
                     Poster(group.image, group.title, Modifier.fillMaxSize(), corner = 0.dp)
                     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = .45f), .4f to Color.Black.copy(alpha = .2f), 1f to Mk.Bg)))
@@ -205,7 +209,7 @@ fun DownloadedSeriesScreen(groupKey: String) {
                     }
                 }
             }
-            item {
+            item(span = { GridItemSpan(maxLineSpan) }) {
                 Row(Modifier.padding(horizontal = 18.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     val playable = Playback.downloadItems(group.entries)
                     PrimaryButton("Play all", { Playback.launch(ctx, PlayQueue(playable, 0)) }, icon = Icons.Rounded.PlayArrow, enabled = playable.isNotEmpty(), modifier = Modifier.weight(1f))
@@ -213,8 +217,8 @@ fun DownloadedSeriesScreen(groupKey: String) {
                 }
             }
             bySeason.forEach { (season, eps) ->
-                item(key = "s$season") { SectionTitle("Season $season · ${eps.size} episode${if (eps.size == 1) "" else "s"}") }
-                items(eps, key = { it.id }) { e ->
+                item(key = "s$season", span = { GridItemSpan(maxLineSpan) }) { SectionTitle("Season $season · ${eps.size} episode${if (eps.size == 1) "" else "s"}") }
+                gridItems(eps, key = { it.id }) { e ->
                     DownloadedEpisodeRow(e, group.image) {
                         val playable = group.entries.filter { it.completed }
                         val idx = playable.indexOfFirst { it.id == e.id }

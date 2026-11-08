@@ -20,6 +20,8 @@ class MkApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        // Media3 logs can include stream URLs (which contain Xtream credentials): keep them out of release logcat.
+        if (!BuildConfig.DEBUG) androidx.media3.common.util.Log.setLogLevel(androidx.media3.common.util.Log.LOG_LEVEL_OFF)
         graph = AppGraph(this)
     }
 
@@ -49,5 +51,5 @@ class AppGraph(app: Application) {
     val store = LocalStore(app.filesDir)
     val api = XtreamApi(http)
     val catalog = CatalogRepository(api, store)
-    val downloads = DownloadsRepository(app, http)
+    val downloads = DownloadsRepository(app, http) { id -> store.playlist(id)?.let { catalog.creds(it) } }
 }

@@ -19,6 +19,32 @@ An Android IPTV player for **Xtream Codes** playlists with a Netflix-style brows
 - **Player**: liquid-glass controls, ±10s, seek bar, playback speed, screen lock, audio & subtitle track selection, aspect ratio (fit/zoom/fill), picture-in-picture, resume position, automatic HLS → MPEG-TS fallback for live channels.
 - **Search** across movies, series and channels.
 
+## Foldables, tablets & large screens
+
+- Layouts adapt to the window size, re-evaluated live when the device is folded or unfolded or the window is resized:
+  - **Live TV**: the player plus a large now/next guide on the left, the channel list on the right.
+  - **Series**: details on the left, seasons and episodes on the right.
+  - **Downloads, downloaded episodes and Playlists**: multi-column grids.
+  - **Movies/Series hero**: the full poster beside the details.
+  - **Tab bar and editors**: kept at a comfortable width.
+- **No restart when folding or unfolding**: playback, scroll position and the current tab are kept.
+- **Tabletop mode**: when the phone is half-folded with a horizontal hinge, the player shows the video above the fold and the controls below it.
+- Regular phones open videos in landscape. Foldables, tablets and multi-window follow the device orientation so tabletop and book postures work.
+
+## Security & privacy
+
+- **No secrets in the app**: there are no API keys, tokens or backend servers. The app talks only to the Xtream server you enter (plus TVs you choose to cast to).
+- **Passwords** are encrypted with an AES-256-GCM key held in the Android Keystore. On a device where the Keystore is broken (rare), the password is stored only base64-encoded, inside the app's private storage.
+- **Downloads** store a credential-free internal address (`mkiptv://…`); the real URL is built only at request time, so passwords are never written to the download database (verified by a test).
+- **No backup / device transfer** of app data (playlists, history and downloads stay on the device).
+- **No logging** of stream URLs in release builds; HTTPS trusts only system certificate authorities.
+- Only the launcher screen is exported; the player and download service are private to the app.
+
+What you should know:
+
+- The **Xtream Codes protocol puts your username and password in every request URL**, and many providers only support **plain HTTP**. Anyone who can watch your network traffic (e.g. on public Wi-Fi) can see them. This is a limitation of Xtream itself; use your provider's `https://` address if it has one.
+- When you **cast or AirPlay**, the stream URL (including the credentials) is handed to the TV, because the TV streams directly from your provider. Only cast to devices you trust.
+
 ## Notes and limitations
 
 - **AirPlay** uses the AirPlay video protocol. If the Apple TV asks for a code or password, set *Settings → AirPlay → Allow Access* to **Everyone** (or "Anyone on the same network") and turn off **Require Password**. Receivers that demand device pairing will show a clear message instead of playing. Android has no system AirPlay support, so this is built into the app.

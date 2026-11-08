@@ -140,15 +140,9 @@ fun LiveScreen(catalog: Catalog, session: Session) {
         Playback.launch(ctx, PlayQueue(items, channels.indexOfFirst { it.id == ch.id }.coerceAtLeast(0)))
     }
 
-    AmbientBackground {
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 120.dp)) {
-            item { TabHeader("Live TV", session) }
-            item {
-                Box(
-                    Modifier
-                        .padding(16.dp)
-                        .fillMaxWidth()
-                        .aspectRatio(16f / 9f)
+    val previewCard: @Composable (Modifier) -> Unit = { outer ->
+        Box(
+            outer
                         .clip(RoundedCornerShape(26.dp))
                         .background(Color.Black)
                         .border(1.dp, Color.White.copy(alpha = .15f), RoundedCornerShape(26.dp))
@@ -187,14 +181,44 @@ fun LiveScreen(catalog: Catalog, session: Session) {
                         }
                     }
                 }
-            }
-            item {
+    }
+    val chips: @Composable () -> Unit = {
                 LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
                     item { GlassChip("All · ${catalog.live.size}", selected = cat == "all", onClick = { cat = "all" }) }
                     item { GlassChip("Favorites", selected = cat == "fav", onClick = { cat = "fav" }, leading = Icons.Rounded.Favorite) }
                     items(cats, key = { it.id }) { c -> GlassChip(c.name, selected = cat == c.id, onClick = { cat = c.id }) }
                 }
+    }
+
+    AmbientBackground {
+        if (isTwoPane()) {
+            // Unfolded foldable / tablet: player + now-playing on the left, channel guide on the right.
+            Column(Modifier.fillMaxSize()) {
+                TabHeader("Live TV", session)
+                Row(Modifier.fillMaxSize()) {
+                    Column(Modifier.weight(1.15f)) {
+                        previewCard(Modifier.padding(16.dp).fillMaxWidth().aspectRatio(16f / 9f))
+                        selected?.let { ch -> NowNextPanel(ch) }
+                    }
+                    LazyColumn(Modifier.weight(1f).fillMaxSize(), contentPadding = PaddingValues(top = 16.dp, bottom = 120.dp)) {
+                        item { chips() }
+                        if (channels.isEmpty()) item {
+                CenterMessage(if (cat == "fav") "No favorite channels" else "No channels", if (cat == "fav") "Tap ♡ on a channel to add it here." else null, modifier = Modifier.height(260.dp))
+                        }
+            items(channels, key = { it.id }) { ch ->
+                ChannelRow(
+                    ch, selected = ch.id == selected?.id, fav = session.isFav("live:${ch.id}"),
+                    onClick = { if (ch.id == selected?.id) openFullscreen(ch) else selectedId = ch.id },
+                    onFav = { MkApp.graph.store.toggleFavorite(session.profileId, "live:${ch.id}") },
+                )
             }
+                    }
+                }
+            }
+        } else LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 120.dp)) {
+            item { TabHeader("Live TV", session) }
+            item { previewCard(Modifier.padding(16.dp).fillMaxWidth().aspectRatio(16f / 9f)) }
+            item { chips() }
             if (channels.isEmpty()) item {
                 CenterMessage(if (cat == "fav") "No favorite channels" else "No channels", if (cat == "fav") "Tap ♡ on a channel to add it here." else null, modifier = Modifier.height(260.dp))
             }
@@ -257,5 +281,27 @@ private fun ChannelRow(ch: LiveChannel, selected: Boolean, fav: Boolean, onClick
             tint = if (fav) Mk.Pink else Color.White.copy(alpha = .4f),
             modifier = Modifier.padding(start = 8.dp).size(22.dp).tap(onFav),
         )
+    }
+}
+
+
+/** Larger now/next guide shown beside the player on unfolded screens. */
+@Composable
+private fun NowNextPanel(ch: LiveChannel) {
+    val epg by produceState(MkApp.graph.catalog.cachedEpg(ch.id), ch.id) { value = MkApp.graph.catalog.epg(ch.id) }
+    Column(Modifier.padding(horizontal = 16.dp).fillMaxWidth().glass(RoundedCornerShape(24.dp)).padding(18.dp)) {
+        Text("${if (ch.num > 0) "${ch.num} · " else ""}${ch.name}", color = Mk.Sub, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        val now = epg?.firstOrNull()
+        Text("NOW", color = Mk.Live, fontSize = 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.5.sp, modifier = Modifier.padding(top = 10.dp))
+        Text(now?.title ?: "No guide information", color = Mk.Text, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        now?.let {
+            Text("${timeFmt.format(Date(it.start))} – ${timeFmt.format(Date(it.end))}", color = Mk.Sub, fontSize = 12.sp)
+            Spacer(Modifier.height(8.dp)); ProgressLine(epgFraction(it), color = Brush.horizontalGradient(listOf(Mk.Live, Mk.Pink)))
+            it.description?.let { d -> Text(d, color = Mk.Sub, fontSize = 13.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp)) }
+        }
+        epg?.getOrNull(1)?.let { n ->
+            Text("NEXT · ${timeFmt.format(Date(n.start))}", color = Mk.Faint, fontSize = 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.5.sp, modifier = Modifier.padding(top = 14.dp))
+            Text(n.title, color = Mk.Text, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
     }
 }

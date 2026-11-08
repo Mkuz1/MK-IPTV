@@ -269,23 +269,21 @@ object Playback {
             key = if (m.kind == "episode") "ep:${e.id.substringAfterLast(':')}" else "vod:${e.id.substringAfterLast(':')}",
             kind = m.kind, title = m.seriesTitle ?: m.title,
             subtitle = if (m.kind == "episode") "S${m.season}:E${m.episode}" + (m.title.takeIf { it.isNotBlank() }?.let { " · $it" } ?: "") else null,
-            url = m.url, image = m.image ?: m.seriesImage, downloadId = e.id, seriesId = m.seriesId,
+            url = runCatching { graph.downloads.resolve(m.url) }.getOrDefault(m.url), image = m.image ?: m.seriesImage, downloadId = e.id, seriesId = m.seriesId,
             itemId = e.id.substringAfterLast(':'), playlistId = m.playlistId,
         )
     }
 
     fun downloadMovie(ctx: Context, pl: Playlist, vod: VodItem, info: VodInfo?) {
-        val c = graph.catalog.creds(pl)
         val ext = info?.ext ?: vod.ext
         graph.downloads.start(
             DownloadsRepository.movieId(pl.id, vod.id),
-            DownloadMeta(kind = "movie", playlistId = pl.id, title = vod.name, image = vod.poster ?: info?.cover, plot = info?.plot, url = XtreamApi.movieUrl(c, vod.id, ext)),
+            DownloadMeta(kind = "movie", playlistId = pl.id, title = vod.name, image = vod.poster ?: info?.cover, plot = info?.plot, url = DownloadsRepository.movieUrl(pl.id, vod.id, ext)),
         )
         toast(ctx, "Downloading “${vod.name}”")
     }
 
     fun downloadEpisodes(ctx: Context, pl: Playlist, seriesId: Int, seriesTitle: String, seriesImage: String?, eps: List<Episode>) {
-        val c = graph.catalog.creds(pl)
         var n = 0
         eps.forEach { ep ->
             val id = DownloadsRepository.episodeId(pl.id, ep.id)
@@ -295,7 +293,7 @@ object Playback {
                     DownloadMeta(
                         kind = "episode", playlistId = pl.id, title = ep.title.ifBlank { "Episode ${ep.num}" }, image = ep.image, plot = ep.plot,
                         seriesId = seriesId, seriesTitle = seriesTitle, seriesImage = seriesImage, season = ep.season, episode = ep.num,
-                        url = XtreamApi.episodeUrl(c, ep.id, ep.ext),
+                        url = DownloadsRepository.episodeUrl(pl.id, ep.id, ep.ext),
                     ),
                 )
                 n++
@@ -305,7 +303,12 @@ object Playback {
     }
 
     fun openTrailer(ctx: Context, trailer: String) {
-        val url = if (trailer.startsWith("http")) trailer else "https://www.youtube.com/watch?v=$trailer"
-        runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+        // Trailer values come from the provider: only ever open http(s) links.
+        val url = when {
+            trailer.startsWith("https://") || trailer.startsWith("http://") -> trailer
+            Regex("^[A-Za-z0-9_-]{6,20}$").matches(trailer) -> "https://www.youtube.com/watch?v=$trailer"
+            else -> return
+        }
+        runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addCategory(Intent.CATEGORY_BROWSABLE)) }
     }
 }

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -117,6 +118,7 @@ private fun TabBar(current: Tab, onSelect: (Tab) -> Unit, modifier: Modifier = M
         modifier
             .navigationBarsPadding()
             .padding(horizontal = 12.dp, vertical = 10.dp)
+            .widthIn(max = 560.dp)
             .fillMaxWidth()
             .height(68.dp)
             .liquidGlass(RoundedCornerShape(50))
@@ -310,12 +312,25 @@ private fun Hero(hero: Any?, movies: Boolean, catalog: Catalog, session: Session
         }
         val title = (hero as? VodItem)?.name ?: (hero as SeriesItem).name
         val image = (hero as? VodItem)?.poster ?: (hero as? SeriesItem)?.let { it.backdrop ?: it.cover }
+        val wide = isWide()
         Poster(image, title, Modifier.fillMaxSize(), corner = 0.dp)
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = .35f), .25f to Color.Transparent, .55f to Color.Transparent, .82f to Mk.Bg.copy(alpha = .85f), 1f to Mk.Bg)))
-        Column(Modifier.align(Alignment.BottomCenter).padding(horizontal = 24.dp).padding(bottom = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        if (wide) {
+            // Unfolded / tablet: dim the cropped artwork and show the full poster beside the details.
+            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Mk.Bg.copy(alpha = .2f), .55f to Mk.Bg.copy(alpha = .75f), 1f to Mk.Bg.copy(alpha = .9f))))
+            Poster(
+                (hero as? VodItem)?.poster ?: (hero as SeriesItem).cover, title,
+                Modifier.align(Alignment.BottomStart).padding(start = 40.dp, bottom = 24.dp).size(240.dp, 360.dp), corner = 22.dp,
+            )
+        }
+        Column(
+            if (wide) Modifier.align(Alignment.BottomStart).padding(start = 310.dp, end = 32.dp, bottom = 30.dp).widthIn(max = 520.dp)
+            else Modifier.align(Alignment.BottomCenter).padding(horizontal = 24.dp).padding(bottom = 6.dp),
+            horizontalAlignment = if (wide) Alignment.Start else Alignment.CenterHorizontally,
+        ) {
             Text(if (movies) "RECENTLY ADDED" else "NEW EPISODES", color = Color(0xFFD9C8FF), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.6.sp)
             Spacer(Modifier.height(8.dp))
-            Text(title.uppercase(), style = TitleStyle, fontSize = if (title.length > 18) 34.sp else 46.sp, lineHeight = if (title.length > 18) 36.sp else 46.sp, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(title.uppercase(), style = TitleStyle, fontSize = if (title.length > 18) 34.sp else 46.sp, lineHeight = if (title.length > 18) 36.sp else 46.sp, textAlign = if (wide) TextAlign.Start else TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(10.dp))
             val genre = if (hero is VodItem) catalog.vodCategoryName(hero.categoryId) else (hero as SeriesItem).genre ?: catalog.seriesCategoryName(hero.categoryId)
             val rating = ratingText((hero as? VodItem)?.rating ?: (hero as? SeriesItem)?.rating)

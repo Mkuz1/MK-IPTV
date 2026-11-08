@@ -19,9 +19,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -133,7 +138,7 @@ fun ProfilesScreen() {
             Spacer(Modifier.height(6.dp))
             Text("Each profile keeps its own favorites & history", color = Mk.Sub, fontSize = 14.sp)
             Spacer(Modifier.height(30.dp))
-            FlowRow(maxItemsInEachRow = 2, horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            FlowRow(maxItemsInEachRow = if (isWide()) 4 else 2, horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 session.data.profiles.forEach { p ->
                     val plName = p.activePlaylistId?.let { id -> session.data.playlists.firstOrNull { it.id == id }?.name }
                         ?: p.playlistIds.firstNotNullOfOrNull { id -> session.data.playlists.firstOrNull { it.id == id }?.name }
@@ -263,8 +268,8 @@ fun PlaylistsScreen(session: Session) {
     val scope = rememberCoroutineScope()
     var confirmDelete by remember { mutableStateOf<Playlist?>(null) }
     AmbientBackground {
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 120.dp)) {
-            item {
+        LazyVerticalGrid(GridCells.Adaptive(380.dp), Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 120.dp)) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
                 Row(Modifier.statusBarsPadding().padding(start = 20.dp, end = 16.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("Playlists", style = TitleStyle, fontSize = 30.sp)
@@ -273,10 +278,10 @@ fun PlaylistsScreen(session: Session) {
                     GlassIconButton(Icons.Rounded.Add, { actions.playlistEditor(null) }, tint = Mk.Accent, blur = false, contentDescription = "Add playlist")
                 }
             }
-            if (session.data.playlists.isEmpty()) item {
+            if (session.data.playlists.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
                 CenterMessage("No playlists yet", "Add your Xtream Codes server URL, username and password.", icon = Icons.AutoMirrored.Rounded.PlaylistPlay, action = "Add playlist", onAction = { actions.playlistEditor(null) }, modifier = Modifier.height(420.dp))
             }
-            items(session.data.playlists, key = { it.id }) { pl ->
+            gridItems(session.data.playlists, key = { it.id }) { pl ->
                 PlaylistCard(
                     pl, inUse = pl.id == session.playlist?.id,
                     onUse = { session.profile?.let { pr ->
@@ -288,7 +293,7 @@ fun PlaylistsScreen(session: Session) {
                     onDelete = { confirmDelete = pl },
                 )
             }
-            item {
+            item(span = { GridItemSpan(maxLineSpan) }) { Column {
                 SectionTitle("Profiles", action = "Manage", onAction = { actions.profiles() })
                 LazyRow(contentPadding = PaddingValues(horizontal = 18.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     items(session.data.profiles, key = { it.id }) { p ->
@@ -306,8 +311,8 @@ fun PlaylistsScreen(session: Session) {
                         }
                     }
                 }
-            }
-            item {
+            } }
+            item(span = { GridItemSpan(maxLineSpan) }) {
                 Text(
                     "MK IPTV ${com.mk.iptv.BuildConfig.VERSION_NAME} · Passwords are encrypted on this device.\nCast to Chromecast & Google TV, or AirPlay to Apple TV from the player.",
                     color = Mk.Faint, fontSize = 11.5.sp, textAlign = TextAlign.Center, lineHeight = 16.sp,
@@ -518,6 +523,8 @@ fun EditorScaffold(title: String, content: @Composable androidx.compose.foundati
     AmbientBackground {
         Column(
             Modifier
+                .align(Alignment.TopCenter)
+                .widthIn(max = 620.dp)
                 .fillMaxSize()
                 .statusBarsPadding()
                 .imePadding()

@@ -4,6 +4,9 @@ import android.content.Context
 import androidx.media3.common.MediaItem
 import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.ResolvingDataSource
+import com.mk.iptv.data.Creds
+import com.mk.iptv.data.XtreamApi
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.NoOpCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
@@ -59,13 +62,39 @@ data class DownloadGroup(
  * played fully offline. Each request carries [DownloadMeta] so the Downloads page can show
  * titles, thumbnails and group episodes by series.
  */
-class DownloadsRepository(private val context: Context, http: OkHttpClient) {
+class DownloadsRepository(
+    private val context: Context,
+    http: OkHttpClient,
+    /** Looks up a playlist's current credentials; used to resolve [internalUrl]s at request time. */
+    private val credsFor: (playlistId: String) -> Creds?,
+) {
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val dbProvider = StandaloneDatabaseProvider(context)
     val downloadDir = File(context.getExternalFilesDir(null) ?: context.filesDir, "downloads")
     val cache = SimpleCache(downloadDir, NoOpCacheEvictor(), dbProvider)
-    val upstream: DataSource.Factory = OkHttpDataSource.Factory(http).setUserAgent("MK IPTV/1.0 (Android)")
+    private val network: DataSource.Factory = OkHttpDataSource.Factory(http).setUserAgent("MK IPTV/1.0 (Android)")
+
+    /**
+     * Network source that turns credential-free "mkiptv://" URLs into real Xtream URLs only at request
+     * time, so usernames/passwords are never written to the download database.
+     */
+    val upstream: DataSource.Factory = ResolvingDataSource.Factory(network) { spec ->
+        if (spec.uri.scheme == SCHEME) spec.withUri(android.net.Uri.parse(resolve(spec.uri.toString()))) else spec
+    }
+
+    /** Converts an internal download URL to the real stream URL (real URLs pass through unchanged). */
+    fun resolve(url: String): String {
+        if (!url.startsWith("$SCHEME://")) return url
+        val rest = url.removePrefix("$SCHEME://")
+        val pid = rest.substringBefore('/')
+        val kind = rest.substringAfter('/').substringBefore('/')
+        val file = rest.substringAfterLast('/')
+        val c = credsFor(pid) ?: throw java.io.IOException("Playlist for this download was removed")
+        val id = file.substringBeforeLast('.')
+        val ext = file.substringAfterLast('.', "mp4")
+        return if (kind == "series") XtreamApi.episodeUrl(c, id, ext) else XtreamApi.movieUrl(c, id.toIntOrNull() ?: 0, ext)
+    }
 
     val manager = DownloadManager(context, dbProvider, cache, upstream, Executors.newFixedThreadPool(3)).apply {
         maxParallelDownloads = 2
@@ -164,6 +193,9 @@ class DownloadsRepository(private val context: Context, http: OkHttpClient) {
     fun freeSpace(): Long = runCatching { downloadDir.usableSpace }.getOrDefault(0)
 
     companion object {
+        const val SCHEME = "mkiptv"
+        fun movieUrl(playlistId: String, vodId: Int, ext: String) = "$SCHEME://$playlistId/movie/$vodId.${ext.ifBlank { "mp4" }}"
+        fun episodeUrl(playlistId: String, episodeId: String, ext: String) = "$SCHEME://$playlistId/series/$episodeId.${ext.ifBlank { "mp4" }}"
         fun movieId(playlistId: String, vodId: Int) = "movie:$playlistId:$vodId"
         fun episodeId(playlistId: String, episodeId: String) = "ep:$playlistId:$episodeId"
     }

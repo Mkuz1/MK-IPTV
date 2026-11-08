@@ -20,8 +20,8 @@ android {
         applicationId = "com.mk.iptv"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
     }
 
     signingConfigs {
@@ -86,6 +86,7 @@ dependencies {
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.mediarouter:mediarouter:1.7.0")
+    implementation("androidx.window:window:1.3.0")
 
     val media3 = "1.5.1"
     implementation("androidx.media3:media3-exoplayer:$media3")

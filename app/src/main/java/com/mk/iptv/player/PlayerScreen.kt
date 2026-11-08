@@ -83,7 +83,7 @@ import com.mk.iptv.ui.glass
 import com.mk.iptv.ui.tap
 import kotlinx.coroutines.delay
 
-private enum class Sheet { NONE, TRACKS, SPEED, AIRPLAY }
+internal enum class Sheet { NONE, TRACKS, SPEED, AIRPLAY }
 
 @Composable
 fun PlayerScreen(a: PlayerActivity) {
@@ -109,6 +109,11 @@ fun PlayerScreen(a: PlayerActivity) {
     val bump = { interaction++ }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
+        val hinge = a.tabletopHinge.value
+        if (hinge != null && !remote && !a.inPip.value) {
+            // Foldable half-open on a table: video above the fold, controls below it.
+            TabletopContent(a, hinge, playing, live, onSheet = { sheet = it })
+        } else {
         // Video surface
         if (!remote) {
             AndroidView(
@@ -279,6 +284,8 @@ fun PlayerScreen(a: PlayerActivity) {
             }
         }
 
+        }
+
         // ---- sheets ----
         if (sheet != Sheet.NONE) {
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .4f)).clickable(remember { MutableInteractionSource() }, null) { sheet = Sheet.NONE })
@@ -378,4 +385,77 @@ private fun fmt(ms: Long): String {
     val s = ms / 1000
     val h = s / 3600; val m = (s % 3600) / 60; val sec = s % 60
     return if (h > 0) "%d:%02d:%02d".format(h, m, sec) else "%d:%02d".format(m, sec)
+}
+
+
+@Composable
+private fun TabletopContent(a: PlayerActivity, hinge: Pair<Int, Int>, playing: Boolean, live: Boolean, onSheet: (Sheet) -> Unit) {
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val player = a.player.value
+    val item = a.current
+    var scrubbing by remember { mutableStateOf(false) }
+    var scrubValue by remember { mutableFloatStateOf(0f) }
+    with(density) {
+        Column(Modifier.fillMaxSize()) {
+            Box(Modifier.fillMaxWidth().height(hinge.first.toDp())) {
+                AndroidView(
+                    factory = { c ->
+                        PlayerView(c).apply {
+                            useController = false
+                            layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                            setShutterBackgroundColor(android.graphics.Color.BLACK)
+                        }
+                    },
+                    update = { v -> v.player = a.exo; v.resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT },
+                    modifier = Modifier.fillMaxSize(),
+                )
+                if (a.buffering.value && a.error.value == null) CircularProgressIndicator(Modifier.align(Alignment.Center).size(44.dp), color = Color.White, strokeWidth = 3.dp)
+            }
+            Spacer(Modifier.height((hinge.second - hinge.first).coerceAtLeast(0).toDp()))
+            Column(
+                Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF12141E), Mk.Bg))).safeDrawingPadding().padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    GlassIconButton(Icons.AutoMirrored.Rounded.ArrowBack, { a.finish() }, size = 42.dp, blur = false)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(item?.title ?: "", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        item?.subtitle?.let { Text(it, color = Mk.Sub, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    }
+                    Box(Modifier.size(42.dp).glass(CircleShape), contentAlignment = Alignment.Center) { CastRouteButton(Modifier.size(42.dp)) }
+                    Spacer(Modifier.width(8.dp))
+                    GlassIconButton(Icons.Rounded.Airplay, { onSheet(Sheet.AIRPLAY) }, size = 42.dp, blur = false)
+                }
+                a.error.value?.let { Text(it, color = Mk.Live, fontSize = 13.sp, maxLines = 2) }
+                val dur = a.duration.longValue
+                if (!live && dur > 0) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(fmt(if (scrubbing) (scrubValue * dur).toLong() else a.position.longValue), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Slider(
+                            value = if (scrubbing) scrubValue else (a.position.longValue.toFloat() / dur).coerceIn(0f, 1f),
+                            onValueChange = { scrubbing = true; scrubValue = it },
+                            onValueChangeFinished = { player?.seekTo((scrubValue * dur).toLong()); scrubbing = false },
+                            colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Mk.Accent, inactiveTrackColor = Color.White.copy(alpha = .25f)),
+                            modifier = Modifier.weight(1f).padding(horizontal = 10.dp),
+                        )
+                        Text("-" + fmt((dur - a.position.longValue).coerceAtLeast(0)), color = Mk.Sub, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                    if (live) GlassIconButton(Icons.Rounded.KeyboardArrowUp, { a.prev() }, size = 52.dp, blur = false)
+                    else GlassIconButton(Icons.Rounded.Replay10, { player?.seekBack() }, size = 52.dp, iconSize = 26.dp, blur = false)
+                    GlassIconButton(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, { player?.let { if (it.isPlaying) it.pause() else it.play() } }, size = 70.dp, iconSize = 34.dp, blur = false)
+                    if (live) GlassIconButton(Icons.Rounded.KeyboardArrowDown, { a.next() }, size = 52.dp, blur = false)
+                    else GlassIconButton(Icons.Rounded.Forward10, { player?.seekForward() }, size = 52.dp, iconSize = 26.dp, blur = false)
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                    BottomAction(Icons.Rounded.ClosedCaption, "Audio & Subtitles") { onSheet(Sheet.TRACKS) }
+                    if (!live) BottomAction(Icons.Rounded.Speed, "Speed (${trim(a.speed.floatValue)}x)") { onSheet(Sheet.SPEED) }
+                    val nextItem = a.queue.value.items.getOrNull(a.index.intValue + 1)
+                    if (nextItem != null && !live) BottomAction(Icons.Rounded.SkipNext, "Next") { a.next() }
+                }
+            }
+        }
+    }
 }

@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Xtream Codes servers are very often plain HTTP. -->
+    <!-- Many Xtream Codes servers only offer plain HTTP, so cleartext must stay allowed.
+         Only system CAs are trusted for HTTPS (no user-installed certificates). -->
     <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
-            <certificates src="user" />
         </trust-anchors>
     </base-config>
 </network-security-config>
