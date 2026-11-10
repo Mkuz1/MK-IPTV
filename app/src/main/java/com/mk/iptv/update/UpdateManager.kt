@@ -66,6 +66,7 @@ class UpdateManager(private val context: Context, private val http: OkHttpClient
 
     /** Checks the feed. [auto] checks are throttled to every 6 hours and stay silent on errors. */
     suspend fun check(auto: Boolean = false) {
+        if (!BuildConfig.SELF_UPDATE) return   // Google Play build: Play handles updates
         val settings = MkApp.graph.store.data.value.settings
         if (auto && (!settings.autoCheckUpdates || System.currentTimeMillis() - settings.lastUpdateCheck < 6 * 3600_000L)) return
         if (_state.value is UpdateState.Downloading || _state.value is UpdateState.Installing) return
@@ -93,6 +94,7 @@ class UpdateManager(private val context: Context, private val http: OkHttpClient
 
     /** Downloads, verifies and installs [info]. */
     suspend fun downloadAndInstall(info: UpdateInfo) {
+        if (!BuildConfig.SELF_UPDATE) return
         try {
             val file = download(info)
             verifySignature(file)

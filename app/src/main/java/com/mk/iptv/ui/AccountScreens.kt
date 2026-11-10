@@ -318,7 +318,7 @@ fun PlaylistsScreen() {
                 }
             } }
             item(span = { GridItemSpan(maxLineSpan) }) { PlaybackSettings(session) }
-            item(span = { GridItemSpan(maxLineSpan) }) { UpdateSettings(session) }
+            if (com.mk.iptv.BuildConfig.SELF_UPDATE) item(span = { GridItemSpan(maxLineSpan) }) { UpdateSettings(session) }
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Text(
                     "MK IPTV ${com.mk.iptv.BuildConfig.VERSION_NAME} · Passwords are encrypted on this device.\nCast to Chromecast & Google TV, or AirPlay to Apple TV from the player.",

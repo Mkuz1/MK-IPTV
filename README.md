@@ -126,13 +126,23 @@ What you should know:
 - **Casting** sends the provider's stream URL to the TV, so the TV needs internet access to your IPTV server. Downloaded files are cast from the server, not from the phone. Chromecast supports MP4/HLS best; MKV may not play on some Chromecast models.
 - Google Cast needs Google Play services. On devices without them the cast button simply finds no devices.
 
+## Google Play build
+
+There are two build variants:
+
+- **direct**: the sideloaded APK with the in-app updater (GitHub releases).
+- **play**: an Android App Bundle for Google Play. Play policy does not allow apps to update themselves, so this variant has no updater, no `REQUEST_INSTALL_PACKAGES` permission and no Settings → App updates section. Play delivers the updates.
+
+`tools/make-release.sh` produces both: `dist/MK-IPTV-<version>.apk` and `dist/MK-IPTV-<version>-play.aab`. Upload the `.aab` in Play Console. With Play App Signing, the MK IPTV key acts as the **upload key**.
+
 ## Building
 
 Requirements: JDK 17+ and the Android SDK (platform 35, build-tools 35).
 
 ```bash
-./gradlew :app:assembleRelease      # signed if keystore.properties exists, unsigned otherwise
-./gradlew :app:testDebugUnitTest    # API/AirPlay tests + full UI flow screenshots in app/build/shots
+./gradlew :app:assembleDirectRelease  # sideload APK (signed if keystore.properties exists)
+./gradlew :app:bundlePlayRelease     # Google Play App Bundle
+./gradlew :app:testDirectDebugUnitTest  # API/AirPlay tests + full UI flow screenshots in app/build/shots
 ```
 
 To sign a release build, create `keystore.properties` in the project root (git-ignored):

@@ -16,13 +16,14 @@ NOTES="${1:-Bug fixes and improvements.}"
 REPO_URL="${RELEASES_REPO:-https://github.com/mkuz1/mk-iptv-releases}"
 
 [ -f keystore.properties ] || { echo "keystore.properties missing (see README)"; exit 1; }
-./gradlew -q :app:assembleRelease
+./gradlew -q :app:assembleDirectRelease :app:bundlePlayRelease
 
 VERSION_NAME=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
 VERSION_CODE=$(grep -oP 'versionCode = \K[0-9]+' app/build.gradle.kts)
 mkdir -p dist
 APK="dist/MK-IPTV-${VERSION_NAME}.apk"
-cp app/build/outputs/apk/release/app-release.apk "$APK"
+cp app/build/outputs/apk/direct/release/app-direct-release.apk "$APK"
+cp app/build/outputs/bundle/playRelease/app-play-release.aab "dist/MK-IPTV-${VERSION_NAME}-play.aab"
 SHA=$(sha256sum "$APK" | cut -d' ' -f1)
 SIZE=$(stat -c %s "$APK")
 
@@ -31,7 +32,7 @@ import json, sys
 code, name, url, sha, notes, size = sys.argv[1:]
 print(json.dumps({"versionCode": int(code), "versionName": name, "apkUrl": url, "sha256": sha, "notes": notes, "sizeBytes": int(size)}, indent=2))
 PY
-echo "Built $APK"
+echo "Built $APK (direct) and dist/MK-IPTV-${VERSION_NAME}-play.aab (Google Play)"
 echo "Feed  dist/version.json:"; cat dist/version.json
 echo
 echo "Next: create release tag v${VERSION_NAME} in ${REPO_URL} and upload both files."

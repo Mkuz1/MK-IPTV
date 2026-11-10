@@ -37,6 +37,20 @@ android {
         }
     }
 
+    // "direct": sideloaded APK with the in-app updater (GitHub releases).
+    // "play":   Google Play App Bundle - Play delivers updates, so no self-update and no install permission.
+    flavorDimensions += "dist"
+    productFlavors {
+        create("direct") {
+            dimension = "dist"
+            buildConfigField("boolean", "SELF_UPDATE", "true")
+        }
+        create("play") {
+            dimension = "dist"
+            buildConfigField("boolean", "SELF_UPDATE", "false")
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
