@@ -1,0 +1,107 @@
+# Rebuilds every Android version from its exact source commit, signs it with the MK IPTV key and
+# publishes it as a GitHub release (versions that already have a release are skipped).
+# Needs the repository secrets KEYSTORE_BASE64, KEYSTORE_PASSWORD and KEY_PASSWORD.
+name: Publish all releases
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 1          # publish in version order
+      fail-fast: false
+      matrix:
+        include:
+          - version: "1.0.0"
+            sha: 8556e1638218adfc1cca663c66cb071d827f83f5
+            gradle: ":app:assembleRelease"
+            notes: "First release: Xtream playlists and profiles, Netflix-style Movies/Series/Live TV with liquid-glass design, quick preview, downloads, Chromecast and AirPlay."
+          - version: "1.1.0"
+            sha: 756b2e7d9218220e8847d7ed1cd9318ea74b2436
+            gradle: ":app:assembleRelease"
+            notes: "Security hardening (no passwords in the download database, no backups, no release logging) and foldable support (two-pane layouts, tabletop mode)."
+          - version: "1.2.0"
+            sha: ed5fa016b6a29304a45142cacc0e503e283a9056
+            gradle: ":app:assembleRelease"
+            notes: "Favorites tab, Continue Watching that survives closing the app, watched marks on episodes."
+          - version: "1.3.0"
+            sha: 2b817297ef6ba998be7d391e9c9f02b77ca218a6
+            gradle: ":app:assembleRelease"
+            notes: "Google TV app, tablet layout with navigation rail, in-app updates, faster start-up and streaming."
+          - version: "1.3.1"
+            sha: 528da952a22700fc0faf87f1e4f6fef64888caeb
+            gradle: ":app:assembleRelease"
+            notes: "Split-screen and car head-unit layout fixes."
+          - version: "1.4.0"
+            sha: 8e873c0603df3161957d57a6a3d68f0757f7d573
+            gradle: ""                # built by tools/make-release.sh (APK + Play bundle + update feed)
+            latest: true
+            notes: "Live TV redesigned (categories left, channels right, Favorites on top), refresh button on every main screen, crash fix for large playlists, shareable error reports. Includes the Google Play bundle (.aab)."
+    steps:
+      - name: Skip if already released
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "v${{ matrix.version }}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then echo "skip=true" >> "$GITHUB_OUTPUT"; fi
+
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.skip != 'true'
+        with:
+          ref: ${{ matrix.sha }}
+
+      - uses: actions/setup-java@v4
+        if: steps.check.outputs.skip != 'true'
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+        if: steps.check.outputs.skip != 'true'
+
+      - name: Restore signing key
+        if: steps.check.outputs.skip != 'true'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEYSTORE_PASSWORD" ] || [ -z "$KEY_PASSWORD" ]; then
+            echo "::error::Add KEYSTORE_BASE64, KEYSTORE_PASSWORD and KEY_PASSWORD in Settings > Secrets and variables > Actions"; exit 1
+          fi
+          mkdir -p keystore
+          echo "$KEYSTORE_BASE64" | base64 -d > keystore/mk-iptv-release.jks
+          printf 'storeFile=keystore/mk-iptv-release.jks\nstorePassword=%s\nkeyAlias=mkiptv\nkeyPassword=%s\n' "$KEYSTORE_PASSWORD" "$KEY_PASSWORD" > keystore.properties
+
+      - name: Build
+        if: steps.check.outputs.skip != 'true'
+        env:
+          NOTES: ${{ matrix.notes }}
+        run: |
+          mkdir -p out
+          if [ -n "${{ matrix.gradle }}" ]; then
+            ./gradlew -q ${{ matrix.gradle }}
+            cp app/build/outputs/apk/release/app-release.apk "out/MK-IPTV-${{ matrix.version }}.apk"
+          else
+            tools/make-release.sh "$NOTES"
+            cp dist/MK-IPTV-*.apk dist/MK-IPTV-*-play.aab dist/version.json out/
+          fi
+          ls -la out
+
+      - name: Publish release
+        if: steps.check.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOTES: ${{ matrix.notes }}
+        run: |
+          gh release create "v${{ matrix.version }}" out/* --repo "$GITHUB_REPOSITORY" --target "${{ matrix.sha }}" \
+            --title "MK IPTV ${{ matrix.version }}" --notes "$NOTES" ${{ matrix.latest && '--latest' || '--latest=false' }}
+
+      - name: Remove signing material
+        if: always()
+        run: rm -f keystore/mk-iptv-release.jks keystore.properties
