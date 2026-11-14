@@ -1,0 +1,88 @@
+# Builds the iPhone/iPad app on a GitHub-hosted Mac.
+# Output: an UNSIGNED .ipa (install with AltStore / Sideloadly, which sign it with your Apple ID).
+# For TestFlight / App Store a paid Apple Developer account and signing secrets are required.
+name: iOS build
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish the .ipa as a GitHub release"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select newest Xcode
+        run: |
+          X=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$X" ]; then sudo xcode-select -s "$X"; fi
+          xcodebuild -version
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Build (unsigned)
+        working-directory: ios
+        run: |
+          set +e
+          xcodebuild -project MKIPTV.xcodeproj -scheme MKIPTV -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build > build.log 2>&1
+          status=$?
+          grep -E "error:" build.log | sort -u | head -80
+          tail -3 build.log
+          exit $status
+
+      - name: Package .ipa
+        working-directory: ios
+        run: |
+          VERSION=$(grep -oE 'MARKETING_VERSION: "[^"]+"' project.yml | cut -d'"' -f2)
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/MKIPTV.app Payload/
+          zip -qry "../MK-IPTV-$VERSION-ios-unsigned.ipa" Payload
+          ls -la ../*.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MK-IPTV-ios
+          path: "*.ipa"
+
+      - name: Report compiler errors (private draft release, for debugging)
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo "Xcode: $(xcodebuild -version | head -1)"; echo; grep -E "error:" ios/build.log | sed 's|.*/ios/|ios/|' | sort -u | head -60; echo; tail -15 ios/build.log; } > errors.txt || true
+          gh release delete ios-ci-log -y --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
+          gh release create ios-ci-log --draft --title "iOS CI log (draft, safe to delete)" --notes-file errors.txt --repo "$GITHUB_REPOSITORY"
+
+      - name: Clear old error report
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release delete ios-ci-log -y --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
+
+      - name: Publish release
+        if: inputs.publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          IPA="MK-IPTV-$VERSION-ios-unsigned.ipa"
+          if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "v$VERSION" "$IPA" --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "ios-v$VERSION" "$IPA" --prerelease --title "MK IPTV for iPhone $VERSION (unsigned)" \
+              --notes "Unsigned iPhone/iPad build. Install with AltStore or Sideloadly (signs it with your Apple ID)." --repo "$GITHUB_REPOSITORY"
+          fi

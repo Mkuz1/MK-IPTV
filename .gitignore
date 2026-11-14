@@ -10,3 +10,7 @@ captures/
 *.keystore
 keystore.properties
 dist/
+ios/*.xcodeproj/
+ios/build/
+ios/Payload/
+*.ipa
