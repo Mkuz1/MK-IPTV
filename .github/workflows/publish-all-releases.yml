@@ -61,9 +61,8 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - uses: android-actions/setup-android@v3
-        if: steps.check.outputs.skip != 'true'
 
+      # GitHub's Ubuntu runners ship the Android SDK (ANDROID_HOME); Gradle fetches missing platforms.
       - name: Restore signing key
         if: steps.check.outputs.skip != 'true'
         env:
