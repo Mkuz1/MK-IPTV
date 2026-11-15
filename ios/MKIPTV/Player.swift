@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import AVKit
 import AVFoundation
 
@@ -9,6 +10,7 @@ final class PlayerModel: ObservableObject {
     let items: [PlayItem]
     @Published var index: Int
     @Published var failure: String?
+    @Published var offline = false
     private weak var store: AppStore?
     private var timeObserver: Any?
     private var endObserver: NSObjectProtocol?
@@ -35,7 +37,10 @@ final class PlayerModel: ObservableObject {
         index = i
         failure = nil
         let it = items[i]
-        let item = AVPlayerItem(url: it.url)
+        // Downloaded? Play the local file (works offline).
+        let isOffline = DownloadManager.shared.localURL(playlistId: it.playlistId, key: it.key) != nil
+        let item = AVPlayerItem(url: DownloadManager.shared.localURL(playlistId: it.playlistId, key: it.key) ?? it.url)
+        offline = isOffline
         item.preferredForwardBufferDuration = it.kind == "live" ? 4 : 20
         let title = AVMutableMetadataItem()
         title.identifier = .commonIdentifierTitle
@@ -105,12 +110,24 @@ struct SystemPlayer: UIViewControllerRepresentable {
     }
 }
 
+/// Rotates the window (iOS 16+ API); used by the full-screen landscape button.
+@MainActor
+enum Orientation {
+    static func set(_ mask: UIInterfaceOrientationMask) {
+        guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first(where: { $0.activationState == .foregroundActive })
+            ?? UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else { return }
+        scene.windows.forEach { $0.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations() }
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { _ in }
+    }
+}
+
 struct PlayerScreen: View {
     let request: PlayerRequest
     @EnvironmentObject var store: AppStore
     @Environment(\.dismiss) var dismiss
     @Environment(\.scenePhase) var phase
     @StateObject private var holder = Holder()
+    @State private var landscape = false
 
     /// Lazily creates the model once the store is available.
     final class Holder: ObservableObject { @Published var model: PlayerModel? }
@@ -120,13 +137,23 @@ struct PlayerScreen: View {
             Color.black.ignoresSafeArea()
             if let m = holder.model {
                 SystemPlayer(player: m.player).ignoresSafeArea()
-                PlayerOverlay(model: m) { m.stop(); dismiss() }
+                PlayerOverlay(model: m, landscape: landscape, toggleLandscape: {
+                    landscape.toggle()
+                    Orientation.set(landscape ? .landscapeRight : .portrait)
+                }) {
+                    m.stop()
+                    if landscape { Orientation.set(.portrait) }
+                    dismiss()
+                }
             }
         }
         .onAppear {
             if holder.model == nil { holder.model = PlayerModel(items: request.items, index: request.index, store: store) }
         }
-        .onDisappear { holder.model?.stop() }
+        .onDisappear {
+            holder.model?.stop()
+            if landscape { Orientation.set(.portrait) }
+        }
         .onChange(of: phase) { _, p in if p != .active { holder.model?.saveProgress() } }
         .statusBarHidden()
     }
@@ -134,6 +161,8 @@ struct PlayerScreen: View {
 
 private struct PlayerOverlay: View {
     @ObservedObject var model: PlayerModel
+    let landscape: Bool
+    let toggleLandscape: () -> Void
     let close: () -> Void
 
     var body: some View {
@@ -143,8 +172,15 @@ private struct PlayerOverlay: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(model.current.title).font(.headline).lineLimit(1)
                     if let s = model.current.subtitle { Text(s).font(.caption).foregroundStyle(Theme.sub).lineLimit(1) }
+                    if model.offline { Label("Offline", systemImage: "arrow.down.circle.fill").font(.caption2.weight(.bold)).foregroundStyle(Theme.green) }
                 }
                 Spacer()
+                // Full-screen landscape on/off.
+                Button(action: toggleLandscape) {
+                    Image(systemName: landscape ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right").font(.headline).frame(width: 40, height: 40)
+                }
+                .glass(20)
+                .accessibilityLabel(landscape ? "Exit full screen" : "Full screen landscape")
                 if model.current.kind == "live" {
                     Button { model.load(model.index - 1) } label: { Image(systemName: "chevron.up").frame(width: 40, height: 40) }.glass(20).disabled(model.index == 0)
                     Button { model.next() } label: { Image(systemName: "chevron.down").frame(width: 40, height: 40) }.glass(20).disabled(!model.hasNext)

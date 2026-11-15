@@ -32,6 +32,8 @@ import androidx.compose.material.icons.rounded.Cast
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ClosedCaption
 import androidx.compose.material.icons.rounded.Forward10
+import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.material.icons.rounded.FullscreenExit
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Lock
@@ -219,6 +221,9 @@ fun PlayerScreen(a: PlayerActivity) {
                                 Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) { CastRouteButton(Modifier.size(44.dp)) }
                                 BarIcon(Icons.Rounded.Airplay, tint = if (airplay != null) Mk.Accent else Color.White) { sheet = Sheet.AIRPLAY; bump() }
                                 if (!remote) BarIcon(Icons.Rounded.PictureInPictureAlt) { a.enterPip() }
+                            }
+                            if (!tv) BarIcon(if (a.forceLandscape.value) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen, tint = if (a.forceLandscape.value) Mk.Accent else Color.White) {
+                                a.toggleLandscape(); bump()
                             }
                             if (!remote) BarIcon(Icons.Rounded.AspectRatio) {
                                 resize = when (resize) {

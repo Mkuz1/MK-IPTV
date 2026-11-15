@@ -208,6 +208,7 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { store.showSettings = false } } }
             .sheet(isPresented: $adding) { AddPlaylistView() }
         }
     }

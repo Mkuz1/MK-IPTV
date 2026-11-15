@@ -179,7 +179,10 @@ struct PlaylistMenu: View {
                     if p.id == store.active?.id { Label(p.name, systemImage: "checkmark") } else { Text(p.name) }
                 }
             }
-        } label: { Image(systemName: "server.rack") }
+            Divider()
+            Button { store.showSettings = true } label: { Label("Settings & playlists", systemImage: "gearshape") }
+        } label: { Image(systemName: "ellipsis.circle") }
+        .accessibilityLabel("Playlists and settings")
     }
 }
 
@@ -217,16 +220,36 @@ struct MoviePreview: View {
                     Label(p.map { !$0.finished && $0.position > 30 } == true ? "Resume" : "Play", systemImage: "play.fill").font(.headline).frame(maxWidth: .infinity, minHeight: 48)
                 }
                 .buttonStyle(.borderedProminent).tint(.white).foregroundStyle(.black)
-                Button {
-                    store.toggleFav("vod:\(vod.id)")
-                } label: {
-                    Label(store.isFav("vod:\(vod.id)") ? "In My List" : "My List", systemImage: store.isFav("vod:\(vod.id)") ? "checkmark" : "plus").frame(maxWidth: .infinity, minHeight: 44)
+                HStack(spacing: 12) {
+                    Button {
+                        store.toggleFav("vod:\(vod.id)")
+                    } label: {
+                        Label(store.isFav("vod:\(vod.id)") ? "In My List" : "My List", systemImage: store.isFav("vod:\(vod.id)") ? "checkmark" : "plus").frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .glass(22)
+                    let item = store.movieItem(vod, ext: info?.ext)
+                    HStack(spacing: 4) {
+                        DownloadButton(item: item, start: {
+                            if let item { DownloadManager.shared.start(item, title: vod.name, image: vod.poster); store.toast = "Downloading “\(vod.name)”" }
+                        })
+                        Text(downloadLabel(item)).font(.subheadline.weight(.semibold))
+                    }
+                    .padding(.horizontal, 14).frame(minHeight: 44).glass(22)
                 }
-                .glass(22)
             }
             .padding(20)
         }
         .task { info = await store.vodInfo(vod.id) ?? VodInfo() }
+    }
+
+    private func downloadLabel(_ item: PlayItem?) -> String {
+        guard let item, let r = DownloadManager.shared.record(item.playlistId, item.key) else { return "Download" }
+        switch r.state {
+        case .done: return "Downloaded"
+        case .failed: return "Failed"
+        case .paused: return "Paused"
+        default: return "\(Int(r.progress * 100))%"
+        }
     }
 }
 
@@ -260,6 +283,12 @@ struct SeriesDetailView: View {
                             Image(systemName: store.isFav("series:\(series.id)") ? "heart.fill" : "heart").foregroundStyle(store.isFav("series:\(series.id)") ? Theme.pink : .white).frame(width: 44, height: 44)
                         }
                         .glass(22)
+                        if let info, !(info.episodes[season] ?? []).isEmpty {
+                            Button {
+                                downloadEpisodes(info.episodes[season] ?? [])
+                            } label: { Label("Download season", systemImage: "arrow.down.circle").font(.subheadline.weight(.semibold)).padding(.horizontal, 14).frame(height: 44) }
+                            .glass(22)
+                        }
                         Spacer()
                         if let info, info.seasons.count > 1 {
                             Picker("Season", selection: $season) { ForEach(info.seasons, id: \.self) { Text("Season \($0)").tag($0) } }.pickerStyle(.menu)
@@ -286,6 +315,18 @@ struct SeriesDetailView: View {
         failed = info == nil
         let last = store.progress.values.filter { $0.seriesId == series.id }.max { $0.updatedAt < $1.updatedAt }
         if let last, let s = info?.episodes.first(where: { $0.value.contains { "ep:\($0.id)" == last.key } })?.key { season = s } else { season = info?.seasons.first ?? 1 }
+    }
+
+    private func downloadEpisodes(_ eps: [Episode]) {
+        var n = 0
+        for ep in eps {
+            guard let item = items.first(where: { $0.key == "ep:\(ep.id)" }) else { continue }
+            if DownloadManager.shared.record(item.playlistId, item.key) != nil { continue }
+            DownloadManager.shared.start(item, title: ep.title.isEmpty ? "Episode \(ep.num)" : ep.title, image: ep.image,
+                                         seriesTitle: series.name, seriesImage: series.cover, season: ep.season, episode: ep.num)
+            n += 1
+        }
+        store.toast = n == 0 ? "Already downloaded" : "Downloading \(n) episode\(n == 1 ? "" : "s")"
     }
 
     @ViewBuilder
@@ -315,6 +356,7 @@ struct SeriesDetailView: View {
         ForEach(eps) { ep in
             let key = "ep:\(ep.id)"
             let p = store.progress[key]
+            HStack(alignment: .top, spacing: 8) {
             Button {
                 play(items, items.firstIndex { $0.key == key } ?? 0)
             } label: {
@@ -337,7 +379,6 @@ struct SeriesDetailView: View {
                     }
                     Spacer(minLength: 0)
                 }
-                .padding(.horizontal)
             }
             .buttonStyle(.plain)
             .contextMenu {
@@ -345,6 +386,10 @@ struct SeriesDetailView: View {
                 if p?.finished == true { Button("Mark as unwatched") { store.setWatched(item, watched: false) } }
                 else { Button("Mark as watched") { store.setWatched(item, watched: true) } }
             }
+            // Separate from the play button so tapping it never starts playback.
+            DownloadButton(item: items.first { $0.key == key }, start: { downloadEpisodes([ep]) })
+            }
+            .padding(.horizontal)
         }
     }
 }

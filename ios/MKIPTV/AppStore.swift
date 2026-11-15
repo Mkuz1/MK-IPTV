@@ -25,6 +25,7 @@ final class AppStore: ObservableObject {
     @Published var loadError: String?
     @Published var refreshing = false
     @Published var toast: String?
+    @Published var showSettings = false
 
     private var memory: [String: Catalog] = [:]
     private var vodInfoCache: [Int: VodInfo] = [:]

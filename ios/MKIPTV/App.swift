@@ -1,8 +1,17 @@
 import SwiftUI
 import AVFoundation
+import UIKit
+
+/// Lets iOS hand finished background downloads back to the app.
+final class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String, completionHandler: @escaping () -> Void) {
+        Task { @MainActor in DownloadManager.shared.backgroundCompletion = completionHandler }
+    }
+}
 
 @main
 struct MKIPTVApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var store = AppStore()
 
     init() {
@@ -139,9 +148,10 @@ struct RootView: View {
                     BrowseView(movies: true).tabItem { Label("Movies", systemImage: "film") }
                     BrowseView(movies: false).tabItem { Label("Series", systemImage: "play.rectangle.on.rectangle") }
                     FavoritesView().tabItem { Label("Favorites", systemImage: "heart") }
-                    SettingsView().tabItem { Label("Settings", systemImage: "gearshape") }
+                    DownloadsView().tabItem { Label("Downloads", systemImage: "arrow.down.circle") }
                 }
-                .task(id: store.activeId) { await store.load() }
+                .task(id: store.activeId) { _ = DownloadManager.shared; await store.load() }
+                .sheet(isPresented: $store.showSettings) { SettingsView() }
             }
         }
         .modifier(Toast(text: $store.toast))

@@ -457,9 +457,18 @@ class PlayerActivity : AppCompatActivity() {
      * Regular phones: landscape for video. Foldables and large screens (unfolded, tablets, multi-window):
      * follow the device so tabletop / book postures and the inner display work naturally.
      */
+    /** Full-screen landscape button: locks the player to landscape until pressed again. */
+    val forceLandscape = mutableStateOf(false)
+
+    fun toggleLandscape() {
+        forceLandscape.value = !forceLandscape.value
+        applyOrientationPolicy()
+    }
+
     private fun applyOrientationPolicy() {
         val large = resources.configuration.smallestScreenWidthDp >= 600
-        val want = if (large || hasFold || (Build.VERSION.SDK_INT >= 24 && isInMultiWindowMode)) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        val want = if (forceLandscape.value) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        else if (large || hasFold || (Build.VERSION.SDK_INT >= 24 && isInMultiWindowMode)) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         if (requestedOrientation != want) requestedOrientation = want
     }
