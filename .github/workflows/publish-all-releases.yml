@@ -82,6 +82,8 @@ jobs:
         if: steps.check.outputs.skip != 'true'
         env:
           NOTES: ${{ matrix.notes }}
+          # The repo is public: its own releases host the APKs and the in-app update feed.
+          RELEASES_REPO: https://github.com/${{ github.repository }}
         run: |
           mkdir -p out
           if [ -n "${{ matrix.gradle }}" ]; then

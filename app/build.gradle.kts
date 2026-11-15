@@ -22,8 +22,8 @@ android {
         targetSdk = 35
         versionCode = 6
         versionName = "1.4.0"
-        // In-app update feed. Publish version.json + the APK as assets of a release in a PUBLIC repo.
-        buildConfigField("String", "UPDATE_URL", "\"https://github.com/mkuz1/mk-iptv-releases/releases/latest/download/version.json\"")
+        // In-app update feed: version.json + the APK attached to the latest release of this (public) repo.
+        buildConfigField("String", "UPDATE_URL", "\"https://github.com/Mkuz1/MK-IPTV/releases/latest/download/version.json\"")
     }
 
     signingConfigs {

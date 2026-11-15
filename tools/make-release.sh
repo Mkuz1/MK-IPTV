@@ -13,7 +13,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 NOTES="${1:-Bug fixes and improvements.}"
-REPO_URL="${RELEASES_REPO:-https://github.com/mkuz1/mk-iptv-releases}"
+REPO_URL="${RELEASES_REPO:-https://github.com/Mkuz1/MK-IPTV}"
 
 [ -f keystore.properties ] || { echo "keystore.properties missing (see README)"; exit 1; }
 ./gradlew -q :app:assembleDirectRelease :app:bundlePlayRelease
