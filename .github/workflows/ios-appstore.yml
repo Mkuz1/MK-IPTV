@@ -1,0 +1,107 @@
+# Signs the iPhone/iPad app with your Apple Developer account and uploads it to App Store Connect
+# (it then appears in TestFlight and can be submitted for App Store review).
+#
+# Repository secrets (Settings > Secrets and variables > Actions):
+#   APPLE_TEAM_ID        10-character Team ID (developer.apple.com > Membership)
+#   APPSTORE_ISSUER_ID   App Store Connect > Users and Access > Integrations > App Store Connect API
+#   APPSTORE_KEY_ID      Key ID of an API key with the "Admin" role (needed for automatic signing)
+#   APPSTORE_API_KEY     full text of the downloaded AuthKey_XXXX.p8 file
+# Optional repository variable:
+#   IOS_BUNDLE_ID        bundle ID of the app record in App Store Connect (default com.mk.iptv)
+name: iOS App Store upload
+
+on:
+  workflow_dispatch:
+    inputs:
+      whats_new:
+        description: "What to Test / What's New"
+        default: "Downloads, new icon, full-screen landscape button."
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    runs-on: macos-15
+    env:
+      BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID || 'com.mk.iptv' }}
+      TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+      KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check secrets
+        env:
+          API_KEY: ${{ secrets.APPSTORE_API_KEY }}
+        run: |
+          missing=""
+          for v in TEAM_ID ISSUER_ID KEY_ID API_KEY; do [ -n "${!v}" ] || missing="$missing $v"; done
+          if [ -n "$missing" ]; then echo "::error::Missing secrets:$missing (see the header of ios-appstore.yml)"; exit 1; fi
+
+      - name: Select newest Xcode
+        run: |
+          X=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$X" ]; then sudo xcode-select -s "$X"; fi
+          xcodebuild -version
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Install API key
+        env:
+          API_KEY: ${{ secrets.APPSTORE_API_KEY }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/keys"
+          printf '%s\n' "$API_KEY" > "$RUNNER_TEMP/keys/AuthKey_$KEY_ID.p8"
+          echo "KEY_PATH=$RUNNER_TEMP/keys/AuthKey_$KEY_ID.p8" >> "$GITHUB_ENV"
+
+      - name: Archive (signed, automatic signing via API key)
+        working-directory: ios
+        run: |
+          BUILD=$((100 + ${{ github.run_number }}))   # always higher than any previous upload
+          echo "BUILD=$BUILD" >> "$GITHUB_ENV"
+          set +e
+          xcodebuild -project MKIPTV.xcodeproj -scheme MKIPTV -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath build/MKIPTV.xcarchive archive \
+            -allowProvisioningUpdates -authenticationKeyPath "$KEY_PATH" -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER_ID" \
+            DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_STYLE=Automatic PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" CURRENT_PROJECT_VERSION="$BUILD" > archive.log 2>&1
+          status=$?
+          grep -E "error:|warning: .*(sign|provision)" archive.log | sort -u | head -60
+          tail -5 archive.log
+          exit $status
+
+      - name: Upload to App Store Connect
+        working-directory: ios
+        run: |
+          cat > ExportOptions.plist <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>$TEAM_ID</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>uploadSymbols</key><true/>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict></plist>
+          PLIST
+          set +e
+          xcodebuild -exportArchive -archivePath build/MKIPTV.xcarchive -exportOptionsPlist ExportOptions.plist -exportPath build/export \
+            -allowProvisioningUpdates -authenticationKeyPath "$KEY_PATH" -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER_ID" > upload.log 2>&1
+          status=$?
+          grep -iE "error|upload|success|fail" upload.log | sort -u | head -40
+          tail -5 upload.log
+          exit $status
+
+      - name: Summary
+        run: |
+          VERSION=$(grep -oE 'MARKETING_VERSION: "[^"]+"' ios/project.yml | cut -d'"' -f2)
+          echo "Uploaded MK IPTV $VERSION ($BUILD) for $BUNDLE_ID. It appears in App Store Connect > TestFlight after Apple finishes processing (usually 5-30 min)." | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove API key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/keys"
