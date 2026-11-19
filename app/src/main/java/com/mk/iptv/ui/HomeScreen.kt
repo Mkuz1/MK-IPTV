@@ -89,6 +89,8 @@ fun HomeScreen() {
     val session = rememberSession()
     val hazeState = remember { HazeState() }
     var tab by rememberSaveable { mutableStateOf(Tab.MOVIES) }
+    // The built-in demo playlist only has a live channel: open it on Live TV.
+    LaunchedEffect(session.playlist?.id) { if (com.mk.iptv.data.DemoServer.isDemo(session.playlist?.server)) tab = Tab.LIVE }
     val holder = rememberSaveableStateHolder()
     var preview by remember { mutableStateOf<PreviewTarget?>(null) }
     val catalogState by MkApp.graph.catalog.state.collectAsState()

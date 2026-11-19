@@ -24,7 +24,26 @@ class MkApp : Application(), ImageLoaderFactory {
         // Media3 logs can include stream URLs (which contain Xtream credentials): keep them out of release logcat.
         if (!BuildConfig.DEBUG) androidx.media3.common.util.Log.setLogLevel(androidx.media3.common.util.Log.LOG_LEVEL_OFF)
         graph = AppGraph(this)
+        seedDemoPlaylist()
         runCatching { graph.sync.resume() }
+    }
+
+    /** First launch only: adds the built-in demo playlist (Makkah Live) so the app can be tried right away. Users can delete it. */
+    private fun seedDemoPlaylist() {
+        val prefs = getSharedPreferences("app", MODE_PRIVATE)
+        if (prefs.getBoolean("demoSeeded", false)) return
+        prefs.edit().putBoolean("demoSeeded", true).apply()
+        val store = graph.store
+        if (store.data.value.playlists.isNotEmpty()) return
+        val pl = com.mk.iptv.data.Playlist(
+            id = LocalStore.newId(), name = com.mk.iptv.data.DemoServer.PLAYLIST_NAME, server = "http://demo",
+            username = com.mk.iptv.data.DemoServer.USER, passwordEnc = com.mk.iptv.data.Crypto.encrypt(com.mk.iptv.data.DemoServer.PASS),
+        )
+        store.upsertPlaylist(pl)
+        if (store.data.value.profiles.isEmpty()) {
+            val me = com.mk.iptv.data.Profile(id = LocalStore.newId(), name = "Me", playlistIds = listOf(pl.id), activePlaylistId = pl.id)
+            store.upsertProfile(me); store.selectProfile(me.id)
+        }
     }
 
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
@@ -52,6 +71,8 @@ class AppGraph(app: Application) {
         .followRedirects(true)
         .followSslRedirects(true)
         .retryOnConnectionFailure(true)
+        // Built-in demo playlist (server "demo", user "demo", password "demo"): answered on-device.
+        .addInterceptor(com.mk.iptv.data.DemoServer(app))
         .build()
     val store = LocalStore(app.filesDir)
     val api = XtreamApi(http)

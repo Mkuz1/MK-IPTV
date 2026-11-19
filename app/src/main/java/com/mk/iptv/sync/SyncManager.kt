@@ -18,7 +18,9 @@ import com.google.firebase.firestore.DocumentChange
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
+import com.mk.iptv.data.Crypto
 import com.mk.iptv.data.LocalStore
+import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
@@ -66,6 +68,8 @@ class SyncManager(private val app: Application, private val store: LocalStore) {
     private var stopListening: (() -> Unit)? = null
     private var pushJob: Job? = null
     private var backend: SyncBackend? = null
+    private var startJob: Job? = null
+    private val keyListeners = mutableListOf<ListenerRegistration>()
 
     val available: Boolean get() = runCatching { FirebaseApp.getApps(app).isNotEmpty() }.getOrDefault(false)
     private val auth get() = FirebaseAuth.getInstance()
@@ -85,9 +89,85 @@ class SyncManager(private val app: Application, private val store: LocalStore) {
         return u?.email?.takeIf { !u.isAnonymous } ?: "Linked with a code"
     }
 
+    // ------------------------------------------------------------------ end-to-end keys
+
+    /** This device's P-256 key pair; the private key is kept encrypted with the Android Keystore. */
+    private fun deviceKeys(): Pair<String, String> {
+        val priv = prefs.getString("devPriv", null)?.let { runCatching { Crypto.decrypt(it) }.getOrNull() }?.takeIf { it.isNotEmpty() }
+        val pub = prefs.getString("devPub", null)
+        if (priv != null && pub != null) return priv to pub
+        val (p, q) = E2e.newKeyPair()
+        prefs.edit().putString("devPriv", Crypto.encrypt(p)).putString("devPub", q).apply()
+        return p to q
+    }
+
+    private fun cachedSpaceKey(space: String): ByteArray? =
+        prefs.getString("skey.$space", null)?.let { runCatching { E2e.unb64(Crypto.decrypt(it)) }.getOrNull() }?.takeIf { it.size == 32 }
+
+    private fun cacheSpaceKey(space: String, key: ByteArray) { prefs.edit().putString("skey.$space", Crypto.encrypt(E2e.b64(key))).apply() }
+
+    /**
+     * Registers this device in the library and returns the library key: from the cache, from a key another device
+     * wrapped for us, or a new key when this is the first device of a new library. Null = wait for another device.
+     */
+    private suspend fun establishKey(space: String): ByteArray? {
+        val (priv, pub) = deviceKeys()
+        val spaceRef = db.collection("spaces").document(space)
+        spaceRef.collection("devices").document(deviceId).set(mapOf(
+            "pub" to pub, "uid" to auth.currentUser!!.uid, "platform" to "android",
+            "name" to "${Build.MANUFACTURER} ${Build.MODEL}".trim(), "seenAt" to FieldValue.serverTimestamp(),
+        )).await()
+        cachedSpaceKey(space)?.let { return it }
+        spaceRef.collection("keys").document(deviceId).get().await().takeIf { it.exists() }?.let { d ->
+            val k = E2e.unwrap(d.getString("eph")!!, d.getString("box")!!, priv)
+            cacheSpaceKey(space, k); return k
+        }
+        if (spaceRef.collection("keys").limit(1).get().await().isEmpty) {   // brand-new library: this device creates the key
+            val k = E2e.newSpaceKey()
+            spaceRef.collection("keys").document(deviceId).set(E2e.wrap(k, pub)).await()
+            cacheSpaceKey(space, k); return k
+        }
+        return null
+    }
+
+    /** Hands the library key to every linked device that doesn't have it yet. */
+    private fun shareKey(space: String, key: ByteArray) {
+        val spaceRef = db.collection("spaces").document(space)
+        keyListeners += spaceRef.collection("devices").addSnapshotListener { snap, _ ->
+            val devices = snap?.documents ?: return@addSnapshotListener
+            scope.launch {
+                runCatching {
+                    val haveKey = spaceRef.collection("keys").get().await().documents.map { it.id }.toSet()
+                    devices.filter { it.id !in haveKey }.forEach { d ->
+                        val pub = d.getString("pub") ?: return@forEach
+                        spaceRef.collection("keys").document(d.id).set(E2e.wrap(key, pub)).await()
+                    }
+                }
+            }
+        }
+    }
+
     private fun start(space: String) {
         stop()
-        val b = FirestoreBackend(db, space) { _status.value = SyncStatus.Error(it) }
+        _status.value = SyncStatus.Working("Securing sync…")
+        startJob = scope.launch {
+            val key = runCatching { establishKey(space) }.getOrElse { _status.value = SyncStatus.Error(it.message ?: "Couldn't secure sync"); return@launch }
+            if (key != null) { begin(space, key); return@launch }
+            _status.value = SyncStatus.Working("Open MK IPTV on a device that is already synced to finish linking. (No other device? Delete synced data and turn sync on again.)")
+            val (priv, _) = deviceKeys()
+            keyListeners += db.collection("spaces").document(space).collection("keys").document(deviceId).addSnapshotListener { d, _ ->
+                if (d == null || !d.exists() || backend != null) return@addSnapshotListener
+                runCatching { E2e.unwrap(d.getString("eph")!!, d.getString("box")!!, priv) }.onSuccess { k ->
+                    cacheSpaceKey(space, k); begin(space, k)
+                }
+            }
+        }
+    }
+
+    private fun begin(space: String, key: ByteArray) {
+        keyListeners.forEach { it.remove() }; keyListeners.clear()
+        shareKey(space, key)
+        val b = FirestoreBackend(db, space, key) { _status.value = SyncStatus.Error(it) }
         backend = b
         _status.value = SyncStatus.On(accountLabel(), prefs.getLong("last", 0))
         val first = java.util.concurrent.atomic.AtomicBoolean(true)
@@ -105,6 +185,8 @@ class SyncManager(private val app: Application, private val store: LocalStore) {
     }
 
     private fun stop() {
+        startJob?.cancel(); startJob = null
+        keyListeners.forEach { it.remove() }; keyListeners.clear()
         stopListening?.invoke(); stopListening = null
         pushJob?.cancel(); pushJob = null
         backend = null
@@ -222,6 +304,7 @@ class SyncManager(private val app: Application, private val store: LocalStore) {
         stop()
         prefs.edit().remove("space").remove("last").apply()
         engine.reset()
+        spaceId?.let { prefs.edit().remove("skey.$it").apply() }
         runCatching { auth.signOut() }
         _status.value = if (available) SyncStatus.Off else SyncStatus.Unavailable
     }
@@ -233,7 +316,7 @@ class SyncManager(private val app: Application, private val store: LocalStore) {
         runCatching {
             val uid = auth.currentUser?.uid
             val spaceRef = db.collection("spaces").document(space)
-            for (col in listOf("items", "members")) {
+            for (col in listOf("items", "keys", "devices", "members")) {
                 val docs = spaceRef.collection(col).get().await().documents.sortedBy { it.id == uid }   // own membership last
                 docs.chunked(400).forEach { chunk -> db.batch().apply { chunk.forEach { delete(it.reference) } }.commit().await() }
             }
@@ -246,12 +329,34 @@ class SyncManager(private val app: Application, private val store: LocalStore) {
     fun dismissError() { _status.value = if (spaceId != null) SyncStatus.On(accountLabel(), prefs.getLong("last", 0)) else SyncStatus.Off }
 }
 
-/** Firestore storage: spaces/{space}/items/{id}. */
+/**
+ * Firestore storage: spaces/{space}/items/{id}. Playlist passwords are sealed with the library key before they leave
+ * the device ("pw" field) and opened when they arrive, so Firebase never sees them.
+ */
 private class FirestoreBackend(
     private val db: FirebaseFirestore,
     space: String,
+    private val key: ByteArray,
     private val onError: (String) -> Unit,
 ) : SyncBackend {
+    private val parser = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+
+    private fun sealJson(i: SyncItem): String {
+        if (i.type != "playlist" || i.deleted) return i.json
+        val o = runCatching { parser.parseToJsonElement(i.json) as kotlinx.serialization.json.JsonObject }.getOrNull() ?: return i.json
+        val pw = (o["password"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: return i.json
+        return kotlinx.serialization.json.JsonObject(o - "password" + ("pw" to kotlinx.serialization.json.JsonPrimitive(E2e.seal(pw.toByteArray(), key)))).toString()
+    }
+
+    /** Null when the item can't be opened (never applied, so a password is never wiped). */
+    private fun openJson(type: String, json: String): String? {
+        if (type != "playlist") return json
+        val o = runCatching { parser.parseToJsonElement(json) as kotlinx.serialization.json.JsonObject }.getOrNull() ?: return json
+        val box = (o["pw"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: return json
+        val pw = runCatching { String(E2e.open(box, key)) }.getOrNull() ?: return null
+        return kotlinx.serialization.json.JsonObject(o - "pw" + ("password" to kotlinx.serialization.json.JsonPrimitive(pw))).toString()
+    }
+
     private val items = db.collection("spaces").document(space).collection("items")
     private fun docId(id: String) = id.replace("/", "%2F")
 
@@ -261,7 +366,7 @@ private class FirestoreBackend(
             val batch = db.batch()
             chunk.forEach { i ->
                 batch.set(this.items.document(docId(i.id)), mapOf(
-                    "id" to i.id, "type" to i.type, "profileId" to i.profileId, "key" to i.key, "json" to i.json,
+                    "id" to i.id, "type" to i.type, "profileId" to i.profileId, "key" to i.key, "json" to sealJson(i),
                     "updatedAt" to i.updatedAt, "deleted" to i.deleted, "device" to i.device,
                 ))
             }
@@ -273,15 +378,20 @@ private class FirestoreBackend(
         val reg = items.addSnapshotListener { snap, err ->
             if (err != null) { onError(err.message ?: "Sync failed"); return@addSnapshotListener }
             snap ?: return@addSnapshotListener
+            val plaintextLeft = mutableListOf<SyncItem>()
             val changed = snap.documentChanges.filter { it.type != DocumentChange.Type.REMOVED && !it.document.metadata.hasPendingWrites() }.mapNotNull { c ->
                 val d = c.document
+                val type = d.getString("type") ?: return@mapNotNull null
+                val raw = d.getString("json") ?: "{}"
                 SyncItem(
-                    id = d.getString("id") ?: return@mapNotNull null, type = d.getString("type") ?: return@mapNotNull null,
+                    id = d.getString("id") ?: return@mapNotNull null, type = type,
                     profileId = d.getString("profileId").orEmpty(), key = d.getString("key") ?: return@mapNotNull null,
-                    json = d.getString("json") ?: "{}", updatedAt = d.getLong("updatedAt") ?: 0, deleted = d.getBoolean("deleted") ?: false,
+                    json = openJson(type, raw) ?: return@mapNotNull null, updatedAt = d.getLong("updatedAt") ?: 0, deleted = d.getBoolean("deleted") ?: false,
                     device = d.getString("device").orEmpty(),
-                )
+                ).also { if (type == "playlist" && !it.deleted && raw.contains("\"password\"")) plaintextLeft += it }
             }
+            // Migration: playlists uploaded before end-to-end encryption are rewritten sealed (same timestamp).
+            if (plaintextLeft.isNotEmpty()) kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch { upload(plaintextLeft) }
             onChange(changed)   // also when empty: the first snapshot triggers the initial upload
         }
         return { reg.remove() }

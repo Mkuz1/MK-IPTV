@@ -17,14 +17,14 @@ val keystoreProps = Properties().apply {
 
 android {
     namespace = "com.mk.iptv"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.mkuz.iptv"
         minSdk = 24
-        targetSdk = 35
-        versionCode = 8
-        versionName = "1.6.0"
+        targetSdk = 36
+        versionCode = 10
+        versionName = "1.7.0"
         // In-app update feed: version.json + the APK attached to the latest release of this (public) repo.
         buildConfigField("String", "UPDATE_URL", "\"https://github.com/Mkuz1/MK-IPTV/releases/latest/download/version.json\"")
     }

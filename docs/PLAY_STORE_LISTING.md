@@ -10,7 +10,9 @@ A beautiful player for your own Xtream Codes IPTV subscription.
 ## Full description
 MK IPTV is a modern video player for the IPTV service you already subscribe to. Add your Xtream Codes server, username and password, and browse live TV, movies and series in a clean, cinematic interface.
 
-MK IPTV does not provide any content. You need your own subscription from an IPTV provider.
+MK IPTV does not provide any content of its own. To try it right away, a demo playlist with one live channel, Al Quran Al Kareem TV (Makkah Live), is included; you can delete it at any time. For everything else you need your own subscription from an IPTV provider.
+
+Please watch responsibly: we advise you to watch only modest, halal shows and content.
 
 FEATURES
 • Live TV with categories, favourites and a now/next programme guide
@@ -18,11 +20,12 @@ FEATURES
 • Continue Watching that remembers exactly where you stopped
 • Watched marks on episodes
 • Download movies and episodes to watch offline
-• Multiple playlists and profiles, including a Kids profile
+• Multiple playlists and profiles
 • Cast to Chromecast / Google TV, and AirPlay to Apple TV
 • Works on phones, tablets, foldables, car head units (split-screen) and Google TV
 • Subtitles and audio track selection, playback speed, picture-in-picture
-• Your passwords are encrypted on your device. No ads, no tracking, no account needed.
+• Optional sync between your devices, with playlist passwords end-to-end encrypted
+• No ads, no tracking, no account needed.
 
 ## Screenshots
 Use images that show **no real channel names, logos or copyrighted posters**. The app screenshots in

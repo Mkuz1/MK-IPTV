@@ -49,7 +49,20 @@ final class AppStore: ObservableObject {
             playlists = s.playlists; activeId = s.activeId; favorites = s.favorites
             progress = s.progress; dismissed = s.dismissed; liveCategory = s.liveCategory
         }
+        seedDemo()
         if activeId == nil { activeId = playlists.first?.id }
+    }
+
+    /// First launch only: add the built-in demo playlist so the app can be tried right away. Users can delete it.
+    private func seedDemo() {
+        let d = UserDefaults.standard
+        guard !d.bool(forKey: "demoSeeded") else { return }
+        d.set(true, forKey: "demoSeeded")
+        guard playlists.isEmpty else { return }
+        let p = Playlist(id: UUID().uuidString, name: Demo.playlistName, server: Demo.server, username: Demo.user)
+        Keychain.set(Demo.pass, for: p.id)
+        playlists.append(p)
+        save(notify: false)
     }
 
     /// Atomic write; called after every change so progress survives the app being closed or killed.

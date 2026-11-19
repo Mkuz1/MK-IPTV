@@ -11,6 +11,9 @@ import GoogleSignIn
 // Account sync, compatible with the Android / Google TV app (same Firestore layout and item format):
 //   spaces/{space}/items/{type~profileId~key} = { id, type, profileId, key, json, updatedAt(ms), deleted, device }
 // The iPhone app has no profiles of its own: it follows one synced profile (chosen in Settings).
+// Playlist passwords are end-to-end encrypted (E2e.swift): the library key is only ever stored wrapped for each device
+// (spaces/{space}/devices/{deviceId} = { pub, ... }, spaces/{space}/keys/{deviceId} = { eph, box }), and synced playlist
+// items carry "pw" (sealed) instead of "password", so Firebase never sees a password.
 
 struct SyncItem {
     var id: String, type: String, profileId: String, key: String, json: String, updatedAt: Int64, deleted: Bool, device: String
@@ -37,6 +40,9 @@ final class SyncService: ObservableObject {
     private struct Known: Codable { var json: String; var updatedAt: Int64; var deleted: Bool }
     private var known: [String: Known] = [:]
     private var listener: ListenerRegistration?
+    private var keyListeners: [ListenerRegistration] = []
+    private var startTask: Task<Void, Never>?
+    private var spaceKey: Data?
     private var pushTask: Task<Void, Never>?
     private var firstSnapshot = true
     private var appleNonce: String?
@@ -95,8 +101,102 @@ final class SyncService: ObservableObject {
         space.map { Firestore.firestore().collection("spaces").document($0).collection("items") }
     }
 
+    // MARK: end-to-end keys
+
+    /// This iPhone's P-256 key pair, kept in the Keychain (this device only).
+    private var deviceKey: P256.KeyAgreement.PrivateKey {
+        if let s = Keychain.get("e2e.device"), let d = Data(base64Encoded: s), let k = try? P256.KeyAgreement.PrivateKey(rawRepresentation: d) { return k }
+        let k = P256.KeyAgreement.PrivateKey()
+        Keychain.set(k.rawRepresentation.base64EncodedString(), for: "e2e.device")
+        return k
+    }
+    private func cachedKey(_ s: String) -> Data? { Keychain.get("e2e.space.\(s)").flatMap { Data(base64Encoded: $0) }.flatMap { $0.count == 32 ? $0 : nil } }
+    private func cacheKey(_ s: String, _ k: Data) { Keychain.set(k.base64EncodedString(), for: "e2e.space.\(s)") }
+
+    /// Registers this iPhone in the library and returns the library key: cached, wrapped for us by another device,
+    /// or new when this is the first device of a new library. Nil = wait for a device that has it.
+    private func establishKey(_ s: String) async throws -> Data? {
+        let priv = deviceKey
+        let ref = Firestore.firestore().collection("spaces").document(s)
+        try await ref.collection("devices").document(deviceId).setData([
+            "pub": E2e.pubB64(priv), "uid": Auth.auth().currentUser?.uid ?? "", "platform": "ios",
+            "name": UIDevice.current.name, "seenAt": FieldValue.serverTimestamp(),
+        ])
+        if let k = cachedKey(s) { return k }
+        if let d = try await ref.collection("keys").document(deviceId).getDocument().data(), let eph = d["eph"] as? String, let box = d["box"] as? String {
+            let k = try E2e.unwrap(eph: eph, box: box, priv: priv)
+            cacheKey(s, k); return k
+        }
+        if try await ref.collection("keys").limit(to: 1).getDocuments().isEmpty {
+            let k = E2e.newSpaceKey()
+            try await ref.collection("keys").document(deviceId).setData(try E2e.wrap(k, recipientPub: E2e.pubB64(priv)))
+            cacheKey(s, k); return k
+        }
+        return nil
+    }
+
+    /// Hands the library key to every linked device that doesn't have it yet.
+    private func shareKey(_ s: String, _ key: Data) {
+        let ref = Firestore.firestore().collection("spaces").document(s)
+        keyListeners.append(ref.collection("devices").addSnapshotListener { snap, _ in
+            guard let devices = snap?.documents else { return }
+            Task {
+                guard let have = try? await ref.collection("keys").getDocuments().documents.map(\.documentID) else { return }
+                for d in devices where !have.contains(d.documentID) {
+                    guard let pub = d.data()["pub"] as? String, let w = try? E2e.wrap(key, recipientPub: pub) else { continue }
+                    try? await ref.collection("keys").document(d.documentID).setData(w)
+                }
+            }
+        })
+    }
+
+    private func sealJson(_ i: SyncItem) -> String {
+        guard i.type == "playlist", !i.deleted, let key = spaceKey else { return i.json }
+        var o = obj(i.json)
+        guard let pw = o["password"] as? String, let box = try? E2e.seal(Data(pw.utf8), key) else { return i.json }
+        o["password"] = nil; o["pw"] = box
+        return encode(o)
+    }
+
+    /// Nil when the item can't be opened: it is skipped, so a password is never wiped.
+    private func openJson(_ type: String, _ json: String) -> String? {
+        guard type == "playlist" else { return json }
+        var o = obj(json)
+        guard let box = o["pw"] as? String else { return json }
+        guard let key = spaceKey, let d = try? E2e.open(box, key), let pw = String(data: d, encoding: .utf8) else { return nil }
+        o["pw"] = nil; o["password"] = pw
+        return encode(o)
+    }
+
+    // MARK: listening
+
     private func start(_ s: String) {
         stop()
+        state = .working("Securing sync…")
+        startTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                if let k = try await self.establishKey(s) { self.begin(s, k); return }
+            } catch {
+                self.state = .error(error.localizedDescription); return
+            }
+            guard !Task.isCancelled else { return }
+            self.state = .working("Open MK IPTV on a device that is already synced to finish linking. (No other device? Delete synced data and turn sync on again.)")
+            let priv = self.deviceKey
+            self.keyListeners.append(Firestore.firestore().collection("spaces").document(s).collection("keys").document(self.deviceId).addSnapshotListener { d, _ in
+                Task { @MainActor in
+                    guard self.listener == nil, let d = d?.data(), let eph = d["eph"] as? String, let box = d["box"] as? String,
+                          let k = try? E2e.unwrap(eph: eph, box: box, priv: priv) else { return }
+                    self.cacheKey(s, k); self.begin(s, k)
+                }
+            })
+        }
+    }
+
+    private func begin(_ s: String, _ key: Data) {
+        keyListeners.forEach { $0.remove() }; keyListeners = []
+        spaceKey = key
+        shareKey(s, key)
         state = .on(account: account, last: lastSync)
         firstSnapshot = true
         listener = Firestore.firestore().collection("spaces").document(s).collection("items").addSnapshotListener { [weak self] snap, err in
@@ -104,14 +204,21 @@ final class SyncService: ObservableObject {
                 guard let self else { return }
                 if let err { self.state = .error(err.localizedDescription); return }
                 guard let snap else { return }
+                var plaintextLeft: [SyncItem] = []
                 let changed: [SyncItem] = snap.documentChanges.compactMap { c in
                     guard c.type != .removed, !c.document.metadata.hasPendingWrites else { return nil }
                     let d = c.document.data()
                     guard let id = d["id"] as? String, let type = d["type"] as? String, let key = d["key"] as? String else { return nil }
-                    return SyncItem(id: id, type: type, profileId: d["profileId"] as? String ?? "", key: key, json: d["json"] as? String ?? "{}",
-                                    updatedAt: (d["updatedAt"] as? NSNumber)?.int64Value ?? 0, deleted: d["deleted"] as? Bool ?? false,
-                                    device: d["device"] as? String ?? "")
+                    let raw = d["json"] as? String ?? "{}"
+                    guard let json = self.openJson(type, raw) else { return nil }
+                    let i = SyncItem(id: id, type: type, profileId: d["profileId"] as? String ?? "", key: key, json: json,
+                                     updatedAt: (d["updatedAt"] as? NSNumber)?.int64Value ?? 0, deleted: d["deleted"] as? Bool ?? false,
+                                     device: d["device"] as? String ?? "")
+                    if type == "playlist", !i.deleted, raw.contains("\"password\"") { plaintextLeft.append(i) }
+                    return i
                 }
+                // Migration: playlists uploaded before end-to-end encryption are rewritten sealed (same timestamp).
+                if !plaintextLeft.isEmpty { self.write(plaintextLeft) }
                 self.applyRemote(changed)
                 if self.firstSnapshot { self.firstSnapshot = false; self.ensureProfile(); self.push() }
                 self.markSynced()
@@ -119,7 +226,12 @@ final class SyncService: ObservableObject {
         }
     }
 
-    private func stop() { listener?.remove(); listener = nil; pushTask?.cancel(); pushTask = nil }
+    private func stop() {
+        listener?.remove(); listener = nil; pushTask?.cancel(); pushTask = nil
+        startTask?.cancel(); startTask = nil
+        keyListeners.forEach { $0.remove() }; keyListeners = []
+        spaceKey = nil
+    }
 
     /// Called by the store after every local change; uploads a few seconds later.
     func localChanged() {
@@ -193,7 +305,7 @@ final class SyncService: ObservableObject {
     }
 
     private func push() {
-        guard let items, store != nil else { return }
+        guard items != nil, spaceKey != nil, store != nil else { return }
         let local = localItems()
         let now = ms(Date())
         var out: [SyncItem] = []
@@ -214,11 +326,17 @@ final class SyncService: ObservableObject {
         }
         guard !out.isEmpty else { return }
         persist()
+        write(out)
+        markSynced()
+    }
+
+    private func write(_ out: [SyncItem]) {
+        guard let items else { return }
         let db = Firestore.firestore()
         for chunk in stride(from: 0, to: out.count, by: 400).map({ Array(out[$0..<min($0 + 400, out.count)]) }) {
             let batch = db.batch()
             for i in chunk {
-                batch.setData(["id": i.id, "type": i.type, "profileId": i.profileId, "key": i.key, "json": i.json,
+                batch.setData(["id": i.id, "type": i.type, "profileId": i.profileId, "key": i.key, "json": sealJson(i),
                                "updatedAt": i.updatedAt, "deleted": i.deleted, "device": i.device],
                               forDocument: items.document(i.id.replacingOccurrences(of: "/", with: "%2F")))
             }
@@ -226,7 +344,6 @@ final class SyncService: ObservableObject {
                 if let err { Task { @MainActor in self?.state = .error(err.localizedDescription) } }
             }
         }
-        markSynced()
     }
 
     // MARK: remote -> local
@@ -452,6 +569,7 @@ final class SyncService: ObservableObject {
     }
 
     func turnOff() {
+        if let s = space { Keychain.delete("e2e.space.\(s)") }
         stop()
         space = nil; profileId = nil; linkCode = nil
         defaults.removeObject(forKey: "sync.last")
@@ -470,7 +588,7 @@ final class SyncService: ObservableObject {
                 let db = Firestore.firestore()
                 let uid = Auth.auth().currentUser?.uid
                 let ref = db.collection("spaces").document(s)
-                for col in ["items", "members"] {
+                for col in ["items", "keys", "devices", "members"] {
                     let docs = try await ref.collection(col).getDocuments().documents.sorted { ($0.documentID == uid ? 1 : 0) < ($1.documentID == uid ? 1 : 0) }
                     for start in stride(from: 0, to: docs.count, by: 400) {
                         let batch = db.batch()

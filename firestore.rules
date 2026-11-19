@@ -4,6 +4,8 @@ rules_version = '2';
 //   users/{uid}                      { spaceId }
 //   spaces/{space}/members/{uid}     one doc per device account that may read/write the space
 //   spaces/{space}/items/{item}      synced records (playlists, profiles, favorites, progress, ...)
+//   spaces/{space}/devices/{device}  each device's public key { pub, uid, platform, name, seenAt }
+//   spaces/{space}/keys/{device}     the library key wrapped for that device { eph, box } (end-to-end encryption)
 //   links/{code}                     one-time link codes { spaceId, createdBy, expiresAt }
 service cloud.firestore {
   match /databases/{db}/documents {
@@ -31,6 +33,15 @@ service cloud.firestore {
     }
 
     match /spaces/{space}/items/{item} {
+      allow read, write: if isMember(space);
+    }
+
+    match /spaces/{space}/devices/{device} {
+      allow read, delete: if isMember(space);
+      allow create, update: if isMember(space) && request.resource.data.uid == request.auth.uid;
+    }
+
+    match /spaces/{space}/keys/{device} {
       allow read, write: if isMember(space);
     }
 

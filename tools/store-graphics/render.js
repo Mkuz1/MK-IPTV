@@ -9,13 +9,12 @@ const icon = 'file://' + path.join(root, 'ios/MKIPTV/Assets.xcassets/AppIcon.app
 const img = f => 'file://' + path.join(shots, f);
 
 const slides = [
-  { id: '01-browse', kicker: 'MOVIES · SERIES · LIVE TV', title: 'Your TV.<br><em>Beautifully</em> organized.', sub: 'Bring your Xtream Codes playlist and get a cinematic, Netflix-style library.', shot: '02-movies.png', tilt: -4 },
+  { id: '01-browse', kicker: 'MOVIES · SERIES · LIVE TV', title: 'Your TV.<br><em>Beautifully</em> organized.', sub: 'Bring your Xtream Codes playlist and get a cinematic library for live TV, movies and series.', shot: '02-movies.png', tilt: -4 },
   { id: '02-continue', kicker: 'CONTINUE WATCHING', title: 'Pick up<br>right where<br>you <em>left off.</em>', sub: 'Saved to the second, even after you close the app.', shot: '05b-series-continue.png', tilt: 4 },
   { id: '03-sync', kicker: 'SYNC ACROSS DEVICES', title: 'One library.<br><em>Every screen.</em>', sub: 'Phone, tablet, TV and iPhone stay in sync. Sign in with Apple or Google, or link with a code.', sync: true },
   { id: '04-downloads', kicker: 'DOWNLOADS', title: 'Download.<br><em>Watch anywhere.</em>', sub: 'Movies and whole seasons offline, on the plane or the road.', shot: '08-downloads.png', tilt: -4 },
   { id: '05-live', kicker: 'LIVE TV', title: 'Thousands of channels.<br><em>Zero chaos.</em>', sub: 'Categories on the left, channels on the right, favorites one tap away.', shot: '10b-live-category.png', tilt: 4 },
   { id: '06-episodes', kicker: 'SERIES', title: 'Every episode,<br><em>tracked.</em>', sub: 'Watched marks, seasons and Up Next — never lose your place.', shot: '06-series-detail.png', tilt: -4 },
-  { id: '07-profiles', kicker: 'PROFILES', title: 'A profile<br>for <em>everyone.</em>', sub: 'Own favorites and history for each person, plus Kids mode.', shot: '01-profiles.png', tilt: 4 },
 ];
 
 const css = (W, H) => `

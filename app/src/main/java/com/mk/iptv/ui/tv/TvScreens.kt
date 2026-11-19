@@ -138,6 +138,7 @@ fun TvHomeScreen() {
     val actions = LocalActions.current
     val state by MkApp.graph.catalog.state.collectAsState()
     var tab by rememberSaveable { mutableStateOf(TvTab.MOVIES) }
+    LaunchedEffect(session.playlist?.id) { if (com.mk.iptv.data.DemoServer.isDemo(session.playlist?.server)) tab = TvTab.LIVE }
     LaunchedEffect(session.playlist?.id) { session.playlist?.id?.let { MkApp.graph.catalog.load(it) } }
     val startFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { delay(300); runCatching { startFocus.requestFocus() } }
