@@ -516,7 +516,13 @@ final class SyncService: ObservableObject {
     func finishApple(_ result: Result<ASAuthorization, Error>) {
         switch result {
         case .failure(let e):
-            if (e as? ASAuthorizationError)?.code != .canceled { state = .error(e.localizedDescription) }
+            switch (e as? ASAuthorizationError)?.code {
+            case .canceled?: break
+            case .unknown?:
+                // 1000: the app isn't signed with the Sign in with Apple capability (e.g. re-signed when sideloaded).
+                state = .error("Sign in with Apple isn't available in this copy of the app. Apps installed outside the App Store or TestFlight can't use it. Use Google or a link code instead.")
+            default: state = .error(e.localizedDescription)
+            }
         case .success(let auth):
             guard let c = auth.credential as? ASAuthorizationAppleIDCredential, let t = c.identityToken, let token = String(data: t, encoding: .utf8),
                   let nonce = appleNonce else { state = .error("Apple sign-in failed"); return }
@@ -641,7 +647,12 @@ struct SyncSettingsSection: View {
                 HStack(spacing: 12) { ProgressView(); Text(m) }
             case .error(let m):
                 Text(m).foregroundStyle(Theme.pink)
-                Button("OK") { sync.dismissError() }
+                if sync.hasSpace {
+                    Button("OK") { sync.dismissError() }
+                } else {
+                    // Not linked yet: keep every way to turn sync on available after a failed attempt.
+                    signInOptions
+                }
             case .on(let account, let last):
                 VStack(alignment: .leading, spacing: 2) {
                     Label("Sync is on", systemImage: "checkmark.circle.fill").foregroundStyle(Theme.green).font(.headline)
@@ -674,23 +685,27 @@ struct SyncSettingsSection: View {
             case .off:
                 Text("Keep playlists, favorites, Continue Watching, watched episodes and preferences the same on your iPhone, Android phone, tablet and Google TV.")
                     .font(.footnote).foregroundStyle(Theme.sub)
-                if entering {
-                    TextField("ABCD-EFGH", text: $code).textInputAutocapitalization(.characters).autocorrectionDisabled().font(.title3.monospaced())
-                    Button("Link this iPhone") { sync.enterCode(code); entering = false; code = "" }
-                        .disabled(code.filter { $0.isLetter || $0.isNumber }.count != 8)
-                    Button("Cancel", role: .cancel) { entering = false }
-                } else {
-                    SignInWithAppleButton(.continue, onRequest: { sync.prepareApple($0) }, onCompletion: { sync.finishApple($0) })
-                        .signInWithAppleButtonStyle(.white).frame(height: 44)
-                    if sync.googleAvailable {
-                        Button { sync.signInWithGoogle() } label: { Label("Continue with Google", systemImage: "person.crop.circle") }
-                    }
-                    Button { entering = true } label: { Label("Enter a code", systemImage: "link") }
-                    Button { sync.startWithCode() } label: { Label("Get a code (no account)", systemImage: "qrcode") }
-                }
+                signInOptions
             }
         } header: {
             Text("Sync across devices")
+        }
+    }
+
+    @ViewBuilder private var signInOptions: some View {
+        if entering {
+            TextField("ABCD-EFGH", text: $code).textInputAutocapitalization(.characters).autocorrectionDisabled().font(.title3.monospaced())
+            Button("Link this iPhone") { sync.enterCode(code); entering = false; code = "" }
+                .disabled(code.filter { $0.isLetter || $0.isNumber }.count != 8)
+            Button("Cancel", role: .cancel) { entering = false }
+        } else {
+            SignInWithAppleButton(.continue, onRequest: { sync.prepareApple($0) }, onCompletion: { sync.finishApple($0) })
+                .signInWithAppleButtonStyle(.white).frame(height: 44)
+            if sync.googleAvailable {
+                Button { sync.signInWithGoogle() } label: { Label("Continue with Google", systemImage: "person.crop.circle") }
+            }
+            Button { entering = true } label: { Label("Enter a code", systemImage: "link") }
+            Button { sync.startWithCode() } label: { Label("Get a code (no account)", systemImage: "qrcode") }
         }
     }
 }
