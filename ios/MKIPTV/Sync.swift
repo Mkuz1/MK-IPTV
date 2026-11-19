@@ -268,6 +268,7 @@ final class SyncService: ObservableObject {
                 let snap = try await items.getDocuments(source: .server)
                 applyRemote(parse(snap.documents))
                 markSynced()
+                store?.toast = "Synced"
             } catch { state = .error(error.localizedDescription) }
         }
     }
