@@ -202,28 +202,38 @@ final class SyncService: ObservableObject {
         listener = Firestore.firestore().collection("spaces").document(s).collection("items").addSnapshotListener { [weak self] snap, err in
             Task { @MainActor in
                 guard let self else { return }
-                if let err { self.state = .error(err.localizedDescription); return }
-                guard let snap else { return }
-                var plaintextLeft: [SyncItem] = []
-                let changed: [SyncItem] = snap.documentChanges.compactMap { c in
-                    guard c.type != .removed, !c.document.metadata.hasPendingWrites else { return nil }
-                    let d = c.document.data()
-                    guard let id = d["id"] as? String, let type = d["type"] as? String, let key = d["key"] as? String else { return nil }
-                    let raw = d["json"] as? String ?? "{}"
-                    guard let json = self.openJson(type, raw) else { return nil }
-                    let i = SyncItem(id: id, type: type, profileId: d["profileId"] as? String ?? "", key: key, json: json,
-                                     updatedAt: (d["updatedAt"] as? NSNumber)?.int64Value ?? 0, deleted: d["deleted"] as? Bool ?? false,
-                                     device: d["device"] as? String ?? "")
-                    if type == "playlist", !i.deleted, raw.contains("\"password\"") { plaintextLeft.append(i) }
-                    return i
+                if let err {
+                    // A failed listener stays dead: show the problem, then reconnect on its own.
+                    self.listener?.remove(); self.listener = nil
+                    self.state = .error(err.localizedDescription)
+                    try? await Task.sleep(nanoseconds: 15_000_000_000)
+                    if self.listener == nil, self.space == s { self.start(s) }
+                    return
                 }
-                // Migration: playlists uploaded before end-to-end encryption are rewritten sealed (same timestamp).
-                if !plaintextLeft.isEmpty { self.write(plaintextLeft) }
+                guard let snap else { return }
+                let changed = self.parse(snap.documentChanges.filter { $0.type != .removed && !$0.document.metadata.hasPendingWrites }.map(\.document))
                 self.applyRemote(changed)
                 if self.firstSnapshot { self.firstSnapshot = false; self.ensureProfile(); self.push() }
                 self.markSynced()
             }
         }
+    }
+
+    /// Firestore documents -> items with passwords opened; playlists stored before end-to-end encryption are re-uploaded sealed.
+    private func parse(_ docs: [DocumentSnapshot]) -> [SyncItem] {
+        var plaintextLeft: [SyncItem] = []
+        let out: [SyncItem] = docs.compactMap { doc in
+            guard let d = doc.data(), let id = d["id"] as? String, let type = d["type"] as? String, let key = d["key"] as? String else { return nil }
+            let raw = d["json"] as? String ?? "{}"
+            guard let json = openJson(type, raw) else { return nil }
+            let i = SyncItem(id: id, type: type, profileId: d["profileId"] as? String ?? "", key: key, json: json,
+                             updatedAt: (d["updatedAt"] as? NSNumber)?.int64Value ?? 0, deleted: d["deleted"] as? Bool ?? false,
+                             device: d["device"] as? String ?? "")
+            if type == "playlist", !i.deleted, raw.contains("\"password\"") { plaintextLeft.append(i) }
+            return i
+        }
+        if !plaintextLeft.isEmpty { write(plaintextLeft) }
+        return out
     }
 
     private func stop() {
@@ -244,7 +254,31 @@ final class SyncService: ObservableObject {
         }
     }
 
-    func syncNow() { push() }
+    @Published private(set) var syncing = false
+
+    /// "Sync now": uploads local changes and downloads everything from the account, or reconnects if sync stopped.
+    func syncNow() {
+        guard let s = space, Auth.auth().currentUser != nil else { return }
+        guard listener != nil, let items else { if keyListeners.isEmpty { start(s) }; return }
+        syncing = true
+        push()
+        Task {
+            defer { syncing = false }
+            do {
+                let snap = try await items.getDocuments(source: .server)
+                applyRemote(parse(snap.documents))
+                markSynced()
+            } catch { state = .error(error.localizedDescription) }
+        }
+    }
+
+    /// App back in the foreground: make sure sync is connected.
+    func onForeground() {
+        // Not connected and not already connecting / waiting for another device to share the key.
+        guard let s = space, Auth.auth().currentUser != nil, listener == nil, keyListeners.isEmpty else { return }
+        if case .working = state { return }
+        start(s)
+    }
 
     // MARK: local -> items
 
@@ -615,7 +649,10 @@ final class SyncService: ObservableObject {
         }
     }
 
-    func dismissError() { state = space != nil ? .on(account: account, last: lastSync) : .off }
+    func dismissError() {
+        if let s = space, listener == nil, Auth.auth().currentUser != nil { start(s); return }
+        state = space != nil ? .on(account: account, last: lastSync) : .off
+    }
 
     private static func randomNonce(_ length: Int = 32) -> String {
         let chars = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
@@ -674,7 +711,8 @@ struct SyncSettingsSection: View {
                 } else {
                     Button { sync.createLinkCode() } label: { Label("Link another device", systemImage: "link") }
                 }
-                Button { sync.syncNow() } label: { Label("Sync now", systemImage: "arrow.clockwise") }
+                Button { sync.syncNow() } label: { Label(sync.syncing ? "Syncing…" : "Sync now", systemImage: "arrow.clockwise") }
+                    .disabled(sync.syncing)
                 Button("Turn off sync") { sync.turnOff() }
                 Button("Delete synced data", role: .destructive) { confirmDelete = true }
                     .confirmationDialog("Delete synced data?", isPresented: $confirmDelete, titleVisibility: .visible) {

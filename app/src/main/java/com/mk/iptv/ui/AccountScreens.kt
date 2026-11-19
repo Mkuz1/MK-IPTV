@@ -612,6 +612,7 @@ fun ToggleCard(items: List<Triple<String, Boolean, (Boolean) -> Unit>>) {
 /* ---------------- Settings sections ---------------- */
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 internal fun SyncSettings() {
     val sync = MkApp.graph.sync
     val st by sync.status.collectAsState()
@@ -656,10 +657,10 @@ internal fun SyncSettings() {
                         Text("Valid for 15 minutes · works on Android, Google TV and iPhone", color = Mk.Faint, fontSize = 11.5.sp)
                     }
                     Spacer(Modifier.height(14.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (s.code == null) GlassChip("Link another device", onClick = { sync.createLinkCode() }, leading = Icons.Rounded.Link)
                         else GlassChip("Done", onClick = { sync.hideLinkCode() })
-                        GlassChip("Sync now", onClick = { sync.flush() }, leading = Icons.Rounded.Refresh)
+                        GlassChip(if (s.syncing) "Syncing…" else "Sync now", onClick = { if (!s.syncing) sync.syncNow() }, leading = Icons.Rounded.Refresh)
                         GlassChip("Turn off", onClick = { sync.turnOff() })
                     }
                     Spacer(Modifier.height(10.dp))
@@ -693,6 +694,7 @@ internal fun SyncSettings() {
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun PlaybackSettings(session: Session) {
     Column {
         SectionTitle("Playback")
@@ -700,7 +702,7 @@ private fun PlaybackSettings(session: Session) {
             Text("Live TV stream format", color = Mk.Text, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold)
             Text("Fastest = MPEG-TS first (quickest channel switching on most Xtream servers), with automatic HLS fallback.", color = Mk.Sub, fontSize = 12.sp, lineHeight = 16.sp)
             Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 val f = session.data.settings.liveFormat
                 GlassChip("Fastest (TS)", f == "auto", { MkApp.graph.store.updateSettings { it.copy(liveFormat = "auto") } })
                 GlassChip("HLS (m3u8)", f == "hls", { MkApp.graph.store.updateSettings { it.copy(liveFormat = "hls") } })

@@ -43,7 +43,7 @@ sealed interface SyncStatus {
     data object Unavailable : SyncStatus
     data object Off : SyncStatus
     data class Working(val message: String) : SyncStatus
-    data class On(val account: String, val lastSync: Long, val code: LinkCode? = null) : SyncStatus
+    data class On(val account: String, val lastSync: Long, val code: LinkCode? = null, val syncing: Boolean = false) : SyncStatus
     data class Error(val message: String) : SyncStatus
 }
 
@@ -167,7 +167,13 @@ class SyncManager(private val app: Application, private val store: LocalStore) {
     private fun begin(space: String, key: ByteArray) {
         keyListeners.forEach { it.remove() }; keyListeners.clear()
         shareKey(space, key)
-        val b = FirestoreBackend(db, space, key) { _status.value = SyncStatus.Error(it) }
+        lateinit var b: FirestoreBackend
+        b = FirestoreBackend(db, space, key) { msg ->
+            // A failed listener stays dead: show the problem, then reconnect on its own.
+            if (backend !== b) return@FirestoreBackend
+            _status.value = SyncStatus.Error(msg)
+            scope.launch { kotlinx.coroutines.delay(15_000); if (backend === b && spaceId == space) start(space) }
+        }
         backend = b
         _status.value = SyncStatus.On(accountLabel(), prefs.getLong("last", 0))
         val first = java.util.concurrent.atomic.AtomicBoolean(true)
@@ -200,8 +206,32 @@ class SyncManager(private val app: Application, private val store: LocalStore) {
         (_status.value as? SyncStatus.On)?.let { _status.value = it.copy(lastSync = now) }
     }
 
-    /** Uploads pending changes now (app going to the background, refresh button). */
+    /** Uploads pending changes now (app going to the background). */
     fun flush() { if (backend != null) scope.launch { push() } }
+
+    /** "Sync now": uploads local changes and downloads everything from the account, or reconnects if sync stopped. */
+    fun syncNow() {
+        val space = spaceId ?: return
+        if (auth.currentUser == null) return
+        val b = backend
+        if (b == null) { if (startJob?.isActive != true) start(space); return }
+        (_status.value as? SyncStatus.On)?.let { _status.value = it.copy(syncing = true) }
+        scope.launch {
+            val r = runCatching {
+                push()
+                engine.applyRemote(b.fetchAll())
+            }
+            (_status.value as? SyncStatus.On)?.let { _status.value = it.copy(syncing = false) }
+            r.onSuccess { markSynced() }.onFailure { _status.value = SyncStatus.Error(it.message ?: "Couldn't sync") }
+        }
+    }
+
+    /** App back in the foreground (also after folding / unfolding): make sure sync is connected. */
+    fun onForeground() {
+        val space = spaceId ?: return
+        if (auth.currentUser == null) return
+        if (backend == null && startJob?.isActive != true) start(space)
+    }
 
     // ------------------------------------------------------------------ joining
 
@@ -326,7 +356,11 @@ class SyncManager(private val app: Application, private val store: LocalStore) {
         turnOff()
     }
 
-    fun dismissError() { _status.value = if (spaceId != null) SyncStatus.On(accountLabel(), prefs.getLong("last", 0)) else SyncStatus.Off }
+    fun dismissError() {
+        val space = spaceId
+        if (space != null && backend == null && auth.currentUser != null) { start(space); return }
+        _status.value = if (space != null) SyncStatus.On(accountLabel(), prefs.getLong("last", 0)) else SyncStatus.Off
+    }
 }
 
 /**
@@ -374,25 +408,40 @@ private class FirestoreBackend(
         }
     }
 
+    /** Firestore document -> item, with the password opened. Null when malformed or it can't be opened. */
+    private fun parse(d: com.google.firebase.firestore.DocumentSnapshot): Pair<SyncItem, String>? {
+        val type = d.getString("type") ?: return null
+        val raw = d.getString("json") ?: "{}"
+        val item = SyncItem(
+            id = d.getString("id") ?: return null, type = type,
+            profileId = d.getString("profileId").orEmpty(), key = d.getString("key") ?: return null,
+            json = openJson(type, raw) ?: return null, updatedAt = d.getLong("updatedAt") ?: 0, deleted = d.getBoolean("deleted") ?: false,
+            device = d.getString("device").orEmpty(),
+        )
+        return item to raw
+    }
+
+    /** Playlists uploaded before end-to-end encryption are rewritten sealed (same timestamp). */
+    private fun migrate(parsed: List<Pair<SyncItem, String>>) {
+        val plaintext = parsed.filter { (i, raw) -> i.type == "playlist" && !i.deleted && raw.contains("\"password\"") }.map { it.first }
+        if (plaintext.isNotEmpty()) kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch { upload(plaintext) }
+    }
+
+    override suspend fun fetchAll(): List<SyncItem> {
+        val parsed = items.get(com.google.firebase.firestore.Source.SERVER).await().documents.mapNotNull(::parse)
+        migrate(parsed)
+        return parsed.map { it.first }
+    }
+
     override fun listen(onChange: (List<SyncItem>) -> Unit): () -> Unit {
         val reg = items.addSnapshotListener { snap, err ->
             if (err != null) { onError(err.message ?: "Sync failed"); return@addSnapshotListener }
             snap ?: return@addSnapshotListener
-            val plaintextLeft = mutableListOf<SyncItem>()
-            val changed = snap.documentChanges.filter { it.type != DocumentChange.Type.REMOVED && !it.document.metadata.hasPendingWrites() }.mapNotNull { c ->
-                val d = c.document
-                val type = d.getString("type") ?: return@mapNotNull null
-                val raw = d.getString("json") ?: "{}"
-                SyncItem(
-                    id = d.getString("id") ?: return@mapNotNull null, type = type,
-                    profileId = d.getString("profileId").orEmpty(), key = d.getString("key") ?: return@mapNotNull null,
-                    json = openJson(type, raw) ?: return@mapNotNull null, updatedAt = d.getLong("updatedAt") ?: 0, deleted = d.getBoolean("deleted") ?: false,
-                    device = d.getString("device").orEmpty(),
-                ).also { if (type == "playlist" && !it.deleted && raw.contains("\"password\"")) plaintextLeft += it }
-            }
-            // Migration: playlists uploaded before end-to-end encryption are rewritten sealed (same timestamp).
-            if (plaintextLeft.isNotEmpty()) kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch { upload(plaintextLeft) }
-            onChange(changed)   // also when empty: the first snapshot triggers the initial upload
+            val parsed = snap.documentChanges
+                .filter { it.type != DocumentChange.Type.REMOVED && !it.document.metadata.hasPendingWrites() }
+                .mapNotNull { parse(it.document) }
+            migrate(parsed)
+            onChange(parsed.map { it.first })   // also when empty: the first snapshot triggers the initial upload
         }
         return { reg.remove() }
     }

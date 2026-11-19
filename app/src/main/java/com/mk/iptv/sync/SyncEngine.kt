@@ -46,6 +46,8 @@ interface SyncBackend {
     suspend fun upload(items: List<SyncItem>)
     /** Delivers added/changed items (the first call contains everything). Returns an unsubscribe function. */
     fun listen(onChange: (List<SyncItem>) -> Unit): () -> Unit
+    /** Everything currently in the account (used by "Sync now"). */
+    suspend fun fetchAll(): List<SyncItem>
 }
 
 /**
@@ -292,6 +294,8 @@ class MemoryBackend : SyncBackend {
         onChange(all)
         return { listeners -= onChange }
     }
+
+    override suspend fun fetchAll(): List<SyncItem> = all
 }
 
 @Suppress("unused")

@@ -164,21 +164,25 @@ fun Poster(url: String?, title: String, modifier: Modifier = Modifier, corner: D
 fun TabHeader(title: String, session: Session, modifier: Modifier = Modifier, showSearch: Boolean = true, hPad: Dp = 16.dp) {
     val actions = LocalActions.current
     var menu by remember { mutableStateOf(false) }
+    // Very narrow windows (folded cover screens, ~340dp): smaller buttons and tighter spacing so the title keeps room.
+    val narrow = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 380
+    val btn = if (narrow) 34.dp else 40.dp
+    val gap = if (narrow) 5.dp else 8.dp
     Row(
         modifier.fillMaxWidth().statusBarsPadding().padding(start = hPad, end = hPad, top = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         session.profile?.let { p ->
-            Avatar(p.name, p.colorIndex, modifier = Modifier.tap { actions.profiles() })
-            Spacer(Modifier.width(10.dp))
+            Avatar(p.name, p.colorIndex, size = if (narrow) 36.dp else 42.dp, fontSize = if (narrow) 13 else 15, modifier = Modifier.tap { actions.profiles() })
+            Spacer(Modifier.width(if (narrow) 8.dp else 10.dp))
         }
-        Text(title, style = TitleStyle, fontSize = 23.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, softWrap = false)
+        Text(title, style = TitleStyle, fontSize = if (narrow) 19.sp else 23.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, softWrap = false)
         val lists = session.playlistsForProfile()
         if (session.playlist != null) {
             Box {
                 if (widthClass() == WidthClass.COMPACT) {
                     // Phones / narrow split-screen: icon only, so the title keeps its room.
-                    GlassIconButton(Icons.Rounded.Dns, { menu = true }, size = 40.dp, contentDescription = session.playlist.name)
+                    GlassIconButton(Icons.Rounded.Dns, { menu = true }, size = btn, contentDescription = session.playlist.name)
                 } else GlassChip(
                     session.playlist.name, onClick = { menu = true }, leading = Icons.Rounded.Dns,
                     trailing = if (lists.size > 1) Icons.Rounded.KeyboardArrowDown else null, height = 40.dp,
@@ -200,18 +204,18 @@ fun TabHeader(title: String, session: Session, modifier: Modifier = Modifier, sh
                     DropdownMenuItem(text = { Text("Settings & playlists…", color = Mk.Sub) }, onClick = { menu = false; actions.playlists() })
                 }
             }
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(gap))
         }
         if (session.playlist != null) {
-            RefreshButton(session.playlist.id)
-            Spacer(Modifier.width(8.dp))
+            RefreshButton(session.playlist.id, size = btn)
+            Spacer(Modifier.width(gap))
         }
         if (showSearch) {
-            GlassIconButton(Icons.Rounded.Search, { actions.search() }, size = 40.dp)
-            Spacer(Modifier.width(8.dp))
+            GlassIconButton(Icons.Rounded.Search, { actions.search() }, size = btn)
+            Spacer(Modifier.width(gap))
         }
-        Box(Modifier.size(40.dp).liquidGlass(CircleShape), contentAlignment = Alignment.Center) {
-            CastRouteButton(Modifier.size(40.dp))
+        Box(Modifier.size(btn).liquidGlass(CircleShape), contentAlignment = Alignment.Center) {
+            CastRouteButton(Modifier.size(btn))
         }
     }
 }

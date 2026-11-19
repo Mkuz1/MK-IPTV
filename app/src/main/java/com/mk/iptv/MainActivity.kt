@@ -103,6 +103,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        MkApp.graph.sync.onForeground()
         // Back from "Install unknown apps" settings: continue the pending update.
         lifecycleScope.launch { MkApp.graph.updates.resumeAfterPermission() }
     }

@@ -193,7 +193,7 @@ fun LiveScreen(catalog: Catalog, session: Session) {
     }
     val cfg = androidx.compose.ui.platform.LocalConfiguration.current
     val threePane = cfg.screenWidthDp >= 900
-    val catWidth = when { cfg.screenWidthDp < 480 -> 150.dp; cfg.screenWidthDp < 720 -> 176.dp; else -> 250.dp }
+    val catWidth = when { cfg.screenWidthDp < 380 -> 124.dp; cfg.screenWidthDp < 480 -> 150.dp; cfg.screenWidthDp < 720 -> 176.dp; else -> 250.dp }
     // Short windows (car head units, split-screen): no inline preview, lists get the full height and
     // tapping a channel opens it full screen. Also avoids holding a stream nobody can see.
     val showPreview = threePane || cfg.screenHeightDp >= 640

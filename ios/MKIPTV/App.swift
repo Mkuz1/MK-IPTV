@@ -21,6 +21,8 @@ struct MKIPTVApp: App {
         SyncService.configure()
     }
 
+    @Environment(\.scenePhase) private var phase
+
     var body: some Scene {
         WindowGroup {
             RootView()
@@ -29,6 +31,7 @@ struct MKIPTVApp: App {
                 .tint(Theme.accent)
                 .task { SyncService.shared.attach(store) }
                 .onOpenURL { GIDSignIn.sharedInstance.handle($0) }
+                .onChange(of: phase) { _, p in if p == .active { SyncService.shared.onForeground() } }
         }
     }
 }
