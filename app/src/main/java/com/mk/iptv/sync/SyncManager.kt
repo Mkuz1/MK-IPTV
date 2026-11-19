@@ -265,7 +265,19 @@ class SyncManager(private val app: Application, private val store: LocalStore) {
             val existing = db.collection("users").document(uid).get().await().getString("spaceId")
             join(existing ?: uid)
         }.onFailure { e ->
-            _status.value = if (e is GetCredentialCancellationException) SyncStatus.Off else SyncStatus.Error(e.message ?: "Sign-in failed")
+            _status.value = when {
+                e is GetCredentialCancellationException -> SyncStatus.Off
+                // No Google account on the device, or a TV whose system doesn't offer Google sign-in to apps.
+                e is androidx.credentials.exceptions.NoCredentialException ||
+                    e is androidx.credentials.exceptions.GetCredentialUnsupportedException ||
+                    e is androidx.credentials.exceptions.GetCredentialProviderConfigurationException ->
+                    SyncStatus.Error(
+                        if (com.mk.iptv.player.Device.isTv(activity))
+                            "Google sign-in isn't available on this TV. On your phone open Settings › Sync across devices › Link another device, then choose Enter a code here."
+                        else "No Google account on this device. Add one in system Settings, or use a link code."
+                    )
+                else -> SyncStatus.Error(e.message ?: "Sign-in failed")
+            }
         }
     }
 
