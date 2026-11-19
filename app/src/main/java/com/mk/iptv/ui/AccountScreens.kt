@@ -317,6 +317,7 @@ fun PlaylistsScreen() {
                     }
                 }
             } }
+            item(span = { GridItemSpan(maxLineSpan) }) { SyncSettings() }
             item(span = { GridItemSpan(maxLineSpan) }) { PlaybackSettings(session) }
             if (com.mk.iptv.BuildConfig.SELF_UPDATE) item(span = { GridItemSpan(maxLineSpan) }) { UpdateSettings(session) }
             item(span = { GridItemSpan(maxLineSpan) }) {
@@ -609,6 +610,86 @@ fun ToggleCard(items: List<Triple<String, Boolean, (Boolean) -> Unit>>) {
 
 
 /* ---------------- Settings sections ---------------- */
+
+@Composable
+internal fun SyncSettings() {
+    val sync = MkApp.graph.sync
+    val st by sync.status.collectAsState()
+    val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
+    var entering by remember { mutableStateOf(false) }
+    var code by remember { mutableStateOf("") }
+    var confirmDelete by remember { mutableStateOf(false) }
+    if (confirmDelete) AlertDialog(
+        onDismissRequest = { confirmDelete = false }, containerColor = Mk.SheetBg,
+        title = { Text("Delete synced data?", color = Mk.Text) },
+        text = { Text("Removes your synced library and sync account from the cloud and stops sync on all devices. Everything on this device stays.", color = Mk.Sub) },
+        confirmButton = { TextButton({ sync.deleteSyncedData(); confirmDelete = false }) { Text("Delete", color = Mk.Live) } },
+        dismissButton = { TextButton({ confirmDelete = false }) { Text("Cancel", color = Mk.Text) } },
+    )
+    Column {
+        SectionTitle("Sync across devices")
+        Column(Modifier.padding(horizontal = 16.dp).fillMaxWidth().glass(RoundedCornerShape(22.dp)).padding(16.dp)) {
+            when (val s = st) {
+                com.mk.iptv.sync.SyncStatus.Unavailable -> Text("Sync isn't available in this build.", color = Mk.Sub, fontSize = 13.sp)
+                is com.mk.iptv.sync.SyncStatus.Working -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.CircularProgressIndicator(Modifier.size(20.dp), color = Mk.Accent, strokeWidth = 2.dp)
+                    Spacer(Modifier.width(12.dp)); Text(s.message, color = Mk.Text, fontSize = 14.sp)
+                }
+                is com.mk.iptv.sync.SyncStatus.Error -> {
+                    Text(s.message, color = Mk.Live, fontSize = 13.5.sp, lineHeight = 18.sp)
+                    Spacer(Modifier.height(10.dp))
+                    GlassChip("OK", onClick = { sync.dismissError() })
+                }
+                is com.mk.iptv.sync.SyncStatus.On -> {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.Check, null, tint = Mk.Green, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Sync is on", color = Mk.Text, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            Text(s.account + (s.lastSync.takeIf { it > 0 }?.let { " · synced ${ago(it)}" } ?: ""), color = Mk.Sub, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                    s.code?.let { c ->
+                        Spacer(Modifier.height(14.dp))
+                        Text("On the other device open Settings › Sync across devices › Enter a code, and type:", color = Mk.Sub, fontSize = 12.5.sp, lineHeight = 17.sp)
+                        Text(c.pretty, color = Color.White, fontSize = 34.sp, fontWeight = FontWeight.Black, letterSpacing = 4.sp, modifier = Modifier.padding(vertical = 8.dp))
+                        Text("Valid for 15 minutes · works on Android, Google TV and iPhone", color = Mk.Faint, fontSize = 11.5.sp)
+                    }
+                    Spacer(Modifier.height(14.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (s.code == null) GlassChip("Link another device", onClick = { sync.createLinkCode() }, leading = Icons.Rounded.Link)
+                        else GlassChip("Done", onClick = { sync.hideLinkCode() })
+                        GlassChip("Sync now", onClick = { sync.flush() }, leading = Icons.Rounded.Refresh)
+                        GlassChip("Turn off", onClick = { sync.turnOff() })
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Text("Delete synced data", color = Mk.Live, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.tap { confirmDelete = true }.padding(vertical = 6.dp))
+                }
+                com.mk.iptv.sync.SyncStatus.Off -> {
+                    Text("Keep playlists, profiles, favorites, Continue Watching, watched episodes and preferences the same on your phone, tablet, Google TV and iPhone.", color = Mk.Sub, fontSize = 12.5.sp, lineHeight = 17.sp)
+                    Spacer(Modifier.height(14.dp))
+                    if (entering) {
+                        GlassField(null, code, { code = it.uppercase().take(9) }, icon = Icons.Rounded.Link, placeholder = "ABCD-EFGH")
+                        Spacer(Modifier.height(10.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            PrimaryButton("Link", { sync.enterCode(code); entering = false; code = "" }, height = 42.dp, enabled = code.count { it.isLetterOrDigit() } == 8)
+                            GlassChip("Cancel", onClick = { entering = false }, height = 42.dp)
+                        }
+                    } else {
+                        @OptIn(ExperimentalLayoutApi::class)
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (activity != null && !com.mk.iptv.player.Device.isTv(activity)) PrimaryButton("Continue with Google", { sync.signInWithGoogle(activity) }, height = 42.dp, icon = Icons.Rounded.Person)
+                            GlassChip("Enter a code", onClick = { entering = true }, leading = Icons.Rounded.Link, height = 42.dp)
+                            GlassChip("Get a code", onClick = { sync.startWithCode() }, height = 42.dp)
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        Text("No account? Tap Get a code on one device and Enter a code on the others.", color = Mk.Faint, fontSize = 11.5.sp, lineHeight = 15.sp)
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun PlaybackSettings(session: Session) {

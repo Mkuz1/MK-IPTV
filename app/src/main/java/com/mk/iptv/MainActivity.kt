@@ -98,6 +98,7 @@ class MainActivity : AppCompatActivity() {
     override fun onStop() {
         super.onStop()
         MkApp.graph.store.flushBlocking()
+        MkApp.graph.sync.flush()
     }
 
     override fun onResume() {

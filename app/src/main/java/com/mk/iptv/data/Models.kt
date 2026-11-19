@@ -68,6 +68,8 @@ data class AppData(
     /** profileId -> ("vod:id" / "series:id" -> time it was removed from Continue Watching) */
     val dismissed: Map<String, Map<String, Long>> = emptyMap(),
     val settings: AppSettings = AppSettings(),
+    /** Old playlist id -> id it was merged into when this device joined account sync (keeps downloads working). */
+    val playlistAliases: Map<String, String> = emptyMap(),
 )
 
 @Serializable

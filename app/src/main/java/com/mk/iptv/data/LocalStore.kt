@@ -59,7 +59,9 @@ class LocalStore(dir: File) {
     }
 
     /* ---- playlists ---- */
-    fun playlist(id: String?) = data.value.playlists.firstOrNull { it.id == id }
+    fun playlist(id: String?): Playlist? = data.value.let { d ->
+        d.playlists.firstOrNull { it.id == id } ?: d.playlistAliases[id]?.let { a -> d.playlists.firstOrNull { it.id == a } }
+    }
 
     fun upsertPlaylist(p: Playlist) = update { d ->
         val list = d.playlists.filterNot { it.id == p.id } + p

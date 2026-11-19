@@ -1,0 +1,44 @@
+rules_version = '2';
+// MK IPTV account sync. Paste into Firebase console › Firestore Database › Rules (or `firebase deploy --only firestore:rules`).
+// Layout:
+//   users/{uid}                      { spaceId }
+//   spaces/{space}/members/{uid}     one doc per device account that may read/write the space
+//   spaces/{space}/items/{item}      synced records (playlists, profiles, favorites, progress, ...)
+//   links/{code}                     one-time link codes { spaceId, createdBy, expiresAt }
+service cloud.firestore {
+  match /databases/{db}/documents {
+    function signedIn() { return request.auth != null; }
+    function isMember(space) {
+      return signedIn() && exists(/databases/$(db)/documents/spaces/$(space)/members/$(request.auth.uid));
+    }
+    function validLink(code, space) {
+      let link = get(/databases/$(db)/documents/links/$(code)).data;
+      return link.spaceId == space && link.expiresAt > request.time;
+    }
+
+    match /users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    match /spaces/{space}/members/{uid} {
+      allow read: if isMember(space);
+      // A new space is owned by the account that creates it (space id == its uid);
+      // anyone else needs an unexpired link code for this space.
+      allow create: if signedIn() && request.auth.uid == uid
+        && (space == uid || (request.resource.data.code is string && validLink(request.resource.data.code, space)));
+      allow update: if signedIn() && request.auth.uid == uid;
+      allow delete: if isMember(space);
+    }
+
+    match /spaces/{space}/items/{item} {
+      allow read, write: if isMember(space);
+    }
+
+    match /links/{code} {
+      allow get: if signedIn();
+      allow create: if isMember(request.resource.data.spaceId)
+        && request.resource.data.expiresAt < request.time + duration.value(1, 'h');
+      allow delete: if signedIn() && isMember(resource.data.spaceId);
+    }
+  }
+}

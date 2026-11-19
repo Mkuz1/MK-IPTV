@@ -26,11 +26,26 @@ jobs:
           if [ -n "$X" ]; then sudo xcode-select -s "$X"; fi
           xcodebuild -version
 
+      - name: Firebase config (account sync)
+        env:
+          GSI: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}
+        run: |
+          if [ -z "$GSI" ]; then echo "::warning::GOOGLE_SERVICE_INFO_PLIST not set - account sync is disabled in this build"; exit 0; fi
+          case "$GSI" in "<"*) printf '%s' "$GSI" > ios/MKIPTV/GoogleService-Info.plist ;; *) echo "$GSI" | base64 -d > ios/MKIPTV/GoogleService-Info.plist ;; esac
+          plutil -lint ios/MKIPTV/GoogleService-Info.plist
+
       - name: Generate Xcode project
         working-directory: ios
         run: |
           brew install xcodegen
           xcodegen generate
+          # Google sign-in returns to the app through its reversed client id URL scheme.
+          G=MKIPTV/GoogleService-Info.plist
+          if [ -f "$G" ] && R=$(/usr/libexec/PlistBuddy -c "Print :REVERSED_CLIENT_ID" "$G" 2>/dev/null); then
+            /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes array" -c "Add :CFBundleURLTypes:0 dict" \
+              -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes array" -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string $R" MKIPTV/Info.plist
+            echo "Google sign-in URL scheme added"
+          fi
 
       - name: Build (unsigned)
         working-directory: ios

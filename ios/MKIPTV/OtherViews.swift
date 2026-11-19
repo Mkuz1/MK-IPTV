@@ -202,6 +202,7 @@ struct SettingsView: View {
                         Text("\(c.live.count) channels · \(c.vod.count) movies · \(c.series.count) series").font(.caption).foregroundStyle(Theme.sub)
                     }
                 }
+                SyncSettingsSection()
                 Section("About") {
                     Text("MK IPTV \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "") for iPhone & iPad")
                     Text("Passwords are stored in the iOS Keychain on this device. Use AirPlay from the player to watch on Apple TV.").font(.caption).foregroundStyle(Theme.sub)

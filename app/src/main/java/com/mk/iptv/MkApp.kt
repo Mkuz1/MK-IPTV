@@ -24,6 +24,7 @@ class MkApp : Application(), ImageLoaderFactory {
         // Media3 logs can include stream URLs (which contain Xtream credentials): keep them out of release logcat.
         if (!BuildConfig.DEBUG) androidx.media3.common.util.Log.setLogLevel(androidx.media3.common.util.Log.LOG_LEVEL_OFF)
         graph = AppGraph(this)
+        runCatching { graph.sync.resume() }
     }
 
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
@@ -56,5 +57,6 @@ class AppGraph(app: Application) {
     val api = XtreamApi(http)
     val catalog = CatalogRepository(api, store, app.filesDir)
     val updates = com.mk.iptv.update.UpdateManager(app, http)
+    val sync = com.mk.iptv.sync.SyncManager(app, store)
     val downloads = DownloadsRepository(app, http) { id -> store.playlist(id)?.let { catalog.creds(it) } }
 }

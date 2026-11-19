@@ -53,9 +53,10 @@ final class AppStore: ObservableObject {
     }
 
     /// Atomic write; called after every change so progress survives the app being closed or killed.
-    func save() {
+    func save(notify: Bool = true) {
         let s = PersistedState(playlists: playlists, activeId: activeId, favorites: favorites, progress: progress, dismissed: dismissed, liveCategory: liveCategory)
         if let d = try? JSONEncoder().encode(s) { try? d.write(to: stateFile, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]) }
+        if notify { SyncService.shared.localChanged() }
     }
 
     var active: Playlist? { playlists.first { $0.id == activeId } ?? playlists.first }

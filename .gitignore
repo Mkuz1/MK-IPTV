@@ -14,3 +14,7 @@ ios/*.xcodeproj/
 ios/build/
 ios/Payload/
 *.ipa
+
+# Firebase configs (public repo: provided to CI via secrets)
+app/google-services.json
+ios/MKIPTV/GoogleService-Info.plist

@@ -29,6 +29,14 @@ An Android IPTV player for **Xtream Codes** playlists with a Netflix-style brows
 - **Player**: liquid-glass controls, ±10s, seek bar, playback speed, screen lock, audio & subtitle track selection, aspect ratio (fit/zoom/fill), picture-in-picture, resume position, automatic HLS → MPEG-TS fallback for live channels.
 - **Search** across movies, series and channels.
 
+## Sync across devices
+
+Settings › **Sync across devices** keeps playlists, profiles, favorites, Continue Watching, watched episodes and
+preferences identical on Android phones/tablets, Google TV and iPhone. Sign in with Google (or Apple on iPhone), or
+link devices with a one-time 8-character code (no account needed). Changes upload a few seconds after they happen and
+arrive on the other devices live; the newest change wins. *Delete synced data* removes the cloud copy.
+Firebase setup: [docs/SYNC_SETUP.md](docs/SYNC_SETUP.md).
+
 ## One app for phone, tablet and Google TV
 
 A single universal APK detects the device and adapts:

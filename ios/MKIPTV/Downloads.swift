@@ -188,6 +188,20 @@ final class DownloadManager: ObservableObject {
         save()
     }
 
+    /// Account sync merged a playlist into an identical one with another id: keep its downloads attached.
+    func remapPlaylist(from: String, to: String) {
+        for (id, r) in records where r.playlistId == from && r.state != .downloading && r.state != .queued {
+            var n = r
+            n.playlistId = to
+            n.id = "\(to)|\(r.key)"
+            let old = Self.directory.appendingPathComponent(r.fileName), new = Self.directory.appendingPathComponent(n.fileName)
+            if FileManager.default.fileExists(atPath: old.path) { try? FileManager.default.moveItem(at: old, to: new) }
+            records[id] = nil
+            records[n.id] = n
+        }
+        save()
+    }
+
     private func launch(id: String, fileName: String, url: URL) {
         let task: URLSessionDownloadTask
         if let data = resumeData.removeValue(forKey: id) { task = session.downloadTask(withResumeData: data) } else { task = session.downloadTask(with: url) }

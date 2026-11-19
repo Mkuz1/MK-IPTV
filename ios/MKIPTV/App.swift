@@ -1,6 +1,7 @@
 import SwiftUI
 import AVFoundation
 import UIKit
+import GoogleSignIn
 
 /// Lets iOS hand finished background downloads back to the app.
 final class AppDelegate: NSObject, UIApplicationDelegate {
@@ -17,6 +18,7 @@ struct MKIPTVApp: App {
     init() {
         URLCache.shared = URLCache(memoryCapacity: 64 * 1024 * 1024, diskCapacity: 300 * 1024 * 1024)
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+        SyncService.configure()
     }
 
     var body: some Scene {
@@ -25,6 +27,8 @@ struct MKIPTVApp: App {
                 .environmentObject(store)
                 .preferredColorScheme(.dark)
                 .tint(Theme.accent)
+                .task { SyncService.shared.attach(store) }
+                .onOpenURL { GIDSignIn.sharedInstance.handle($0) }
         }
     }
 }
