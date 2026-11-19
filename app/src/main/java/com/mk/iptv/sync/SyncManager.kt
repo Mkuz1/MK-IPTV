@@ -157,6 +157,22 @@ class SyncManager(private val app: Application, private val store: LocalStore) {
         }
     }
 
+    /** Sign in with Apple (same Apple ID as on the iPhone = same library). Uses Firebase's web flow on Android. */
+    fun signInWithApple(activity: Activity) = scope.launch {
+        if (!available) return@launch
+        _status.value = SyncStatus.Working("Signing in with Apple…")
+        runCatching {
+            val provider = com.google.firebase.auth.OAuthProvider.newBuilder("apple.com").setScopes(listOf("email")).build()
+            (auth.pendingAuthResult?.await() ?: auth.startActivityForSignInWithProvider(activity, provider).await())
+            val uid = auth.currentUser!!.uid
+            val existing = db.collection("users").document(uid).get().await().getString("spaceId")
+            join(existing ?: uid)
+        }.onFailure { e ->
+            val cancelled = (e as? com.google.firebase.auth.FirebaseAuthException)?.errorCode == "ERROR_WEB_CONTEXT_CANCELED"
+            _status.value = if (cancelled) SyncStatus.Off else SyncStatus.Error(e.message ?: "Apple sign-in failed")
+        }
+    }
+
     /** Turns on sync without an account and shows a code for the next device. */
     fun startWithCode() = scope.launch {
         if (!available) return@launch

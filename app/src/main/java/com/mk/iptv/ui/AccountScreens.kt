@@ -679,6 +679,7 @@ internal fun SyncSettings() {
                         @OptIn(ExperimentalLayoutApi::class)
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (activity != null && !com.mk.iptv.player.Device.isTv(activity)) PrimaryButton("Continue with Google", { sync.signInWithGoogle(activity) }, height = 42.dp, icon = Icons.Rounded.Person)
+                            if (activity != null && !com.mk.iptv.player.Device.isTv(activity)) PrimaryButton("Continue with Apple", { sync.signInWithApple(activity) }, height = 42.dp)
                             GlassChip("Enter a code", onClick = { entering = true }, leading = Icons.Rounded.Link, height = 42.dp)
                             GlassChip("Get a code", onClick = { sync.startWithCode() }, height = 42.dp)
                         }
