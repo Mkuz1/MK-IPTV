@@ -482,6 +482,12 @@ final class SyncService: ObservableObject {
               let root = UIApplication.shared.connectedScenes.compactMap({ ($0 as? UIWindowScene)?.keyWindow?.rootViewController }).first else {
             state = .error("Google sign-in isn't set up for this build yet. Use a link code instead."); return
         }
+        // GIDSignIn crashes (NSException) if the app can't receive its callback URL; fail gracefully instead.
+        let reversed = clientID.split(separator: ".").reversed().joined(separator: ".")
+        let schemes = (Bundle.main.object(forInfoDictionaryKey: "CFBundleURLTypes") as? [[String: Any]] ?? []).flatMap { $0["CFBundleURLSchemes"] as? [String] ?? [] }
+        guard schemes.contains(reversed) else {
+            state = .error("Google sign-in isn't set up for this build. Use Sign in with Apple or a link code."); return
+        }
         var top = root
         while let p = top.presentedViewController { top = p }
         state = .working("Signing in with Google…")

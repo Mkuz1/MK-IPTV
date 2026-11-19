@@ -530,7 +530,8 @@ fun TvLive(catalog: Catalog, session: Session) {
     var focusedCh by remember { mutableStateOf<LiveChannel?>(null) }
     var playing by remember { mutableStateOf<LiveChannel?>(null) }
     LaunchedEffect(focusedCh) { delay(700); focusedCh?.let { playing = it } }   // preview follows focus (debounced)
-    val player = remember { com.mk.iptv.player.Players.build(ctx, MkApp.graph.downloads.upstream, preview = true) }
+    // Silent preview; OK opens the channel full screen with sound.
+    val player = remember { com.mk.iptv.player.Players.build(ctx, MkApp.graph.downloads.upstream, preview = true).apply { volume = 0f } }
     DisposableEffect(Unit) { onDispose { player.release() } }
     LaunchedEffect(playing?.id) {
         val ch = playing ?: return@LaunchedEffect
@@ -565,6 +566,7 @@ fun TvLive(catalog: Catalog, session: Session) {
                 AndroidView({ c -> PlayerView(c).apply { useController = false; resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT; layoutParams = ViewGroup.LayoutParams(-1, -1); this.player = player } }, Modifier.fillMaxSize())
                 if (playing == null) CenterMessage("Choose a channel", "Move through the list to preview. Press OK for full screen.", icon = Icons.Rounded.LiveTv)
                 Text("LIVE", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(12.dp).clip(RoundedCornerShape(50)).background(Mk.Live).padding(horizontal = 10.dp, vertical = 3.dp))
+                if (playing != null) Text("🔇  Muted · OK for sound", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.TopEnd).padding(12.dp).clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = .55f)).padding(horizontal = 10.dp, vertical = 3.dp))
             }
             playing?.let { ch ->
                 val epg by produceState<List<EpgEntry>?>(MkApp.graph.catalog.cachedEpg(ch.id), ch.id) { value = MkApp.graph.catalog.epg(ch.id) }

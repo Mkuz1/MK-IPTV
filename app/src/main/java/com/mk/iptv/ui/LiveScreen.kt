@@ -104,9 +104,10 @@ fun LiveScreen(catalog: Catalog, session: Session) {
 
     // Inline preview player
     val player = remember {
-        com.mk.iptv.player.Players.build(ctx, MkApp.graph.downloads.upstream, preview = true).apply { volume = 1f }
+        com.mk.iptv.player.Players.build(ctx, MkApp.graph.downloads.upstream, preview = true).apply { volume = 0f }
     }
-    var muted by remember { mutableStateOf(false) }
+    // The inline preview starts muted; the speaker button turns sound on (kept while browsing channels).
+    var muted by rememberSaveable { mutableStateOf(true) }
     var buffering by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle

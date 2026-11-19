@@ -55,9 +55,15 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         UIUserInterfaceStyle: Dark
+        # Google Sign-In returns to the app through this URL scheme (REVERSED_CLIENT_ID from GoogleService-Info.plist).
+        # Without it GIDSignIn raises an exception and the app crashes.
+        CFBundleURLTypes:
+          - CFBundleURLName: google
+            CFBundleURLSchemes: [$(GOOGLE_REVERSED_CLIENT_ID)]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mkuz.mkiptv
+        GOOGLE_REVERSED_CLIENT_ID: com.googleusercontent.apps.753825229881-ln35cshmqr1a312nm189127tbrn34hmk
         CODE_SIGN_ENTITLEMENTS: MKIPTV/MKIPTV.entitlements
         PRODUCT_NAME: MKIPTV
         TARGETED_DEVICE_FAMILY: "1,2"
