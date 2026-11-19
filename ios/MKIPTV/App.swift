@@ -85,12 +85,17 @@ struct Poster: View {
             LinearGradient(colors: [Color(hue: hue, saturation: 0.55, brightness: 0.38), Color(hue: hue, saturation: 0.55, brightness: 0.12)],
                            startPoint: .topLeading, endPoint: .bottomTrailing)
             Text(title).font(.system(size: 14, weight: .black)).foregroundStyle(.white).multilineTextAlignment(.center).lineLimit(4).padding(8)
+        }
+        // The artwork fills the frame it is given (overlay, not a ZStack child), so a tall image can never
+        // make the view bigger than its frame and spill over neighbouring controls.
+        .overlay {
             if let s = url, let u = URL(string: s) {
                 AsyncImage(url: u) { phase in
                     if let img = phase.image { img.resizable().scaledToFill() } else { Color.clear }
                 }
             }
         }
+        .clipped()
         .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).stroke(Color.white.opacity(0.08), lineWidth: 1))
     }

@@ -13,9 +13,11 @@ struct BrowseView: View {
     @EnvironmentObject var store: AppStore
     @Environment(\.play) var play
     @State private var preview: VodItem?
+    @State private var seriesPreview: SeriesItem?
+    @State private var path: [SeriesItem] = []
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             CatalogGate { cat in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 18) {
@@ -31,7 +33,7 @@ struct BrowseView: View {
                                                 .buttonStyle(.plain)
                                         }
                                         ForEach(shelf.series) { s in
-                                            NavigationLink(value: s) { Poster(url: s.cover, title: s.name).frame(width: 118, height: 176) }
+                                            Button { seriesPreview = s } label: { Poster(url: s.cover, title: s.name).frame(width: 118, height: 176) }
                                                 .buttonStyle(.plain)
                                         }
                                     }
@@ -51,6 +53,14 @@ struct BrowseView: View {
             }
             .navigationDestination(for: SeriesItem.self) { SeriesDetailView(series: $0) }
             .sheet(item: $preview) { v in MoviePreview(vod: v).presentationDetents([.medium, .large]).presentationBackground(.ultraThinMaterial) }
+            .sheet(item: $seriesPreview) { s in
+                SeriesPreview(series: s) {
+                    seriesPreview = nil
+                    // Open the series page once the sheet has gone.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { path.append(s) }
+                }
+                .presentationDetents([.medium, .large]).presentationBackground(.ultraThinMaterial)
+            }
         }
     }
 
@@ -62,7 +72,7 @@ struct BrowseView: View {
                 if let it = store.movieItem(v) { play([it]) }
             } info: { preview = v }
         } else if !movies, let s = cat.series.filter({ allowed.contains($0.categoryId ?? "") }).max(by: { $0.lastModified < $1.lastModified }) {
-            NavigationLink(value: s) {
+            Button { seriesPreview = s } label: {
                 heroCard(image: s.backdrop ?? s.cover, title: s.name, tag: "NEW EPISODES", rating: s.rating, play: nil, info: nil)
             }
             .buttonStyle(.plain)
@@ -220,21 +230,19 @@ struct MoviePreview: View {
                     Label(p.map { !$0.finished && $0.position > 30 } == true ? "Resume" : "Play", systemImage: "play.fill").font(.headline).frame(maxWidth: .infinity, minHeight: 48)
                 }
                 .buttonStyle(.borderedProminent).tint(.white).foregroundStyle(.black)
-                HStack(spacing: 12) {
-                    Button {
-                        store.toggleFav("vod:\(vod.id)")
-                    } label: {
-                        Label(store.isFav("vod:\(vod.id)") ? "In My List" : "My List", systemImage: store.isFav("vod:\(vod.id)") ? "checkmark" : "plus").frame(maxWidth: .infinity, minHeight: 44)
-                    }
-                    .glass(22)
+                HStack {
+                    Spacer()
+                    ActionCircle(icon: store.isFav("vod:\(vod.id)") ? "checkmark" : "plus", label: "My List") { store.toggleFav("vod:\(vod.id)") }
+                    Spacer()
                     let item = store.movieItem(vod, ext: info?.ext)
-                    HStack(spacing: 4) {
+                    VStack(spacing: 6) {
                         DownloadButton(item: item, start: {
                             if let item { DownloadManager.shared.start(item, title: vod.name, image: vod.poster); store.toast = "Downloading “\(vod.name)”" }
                         })
-                        Text(downloadLabel(item)).font(.subheadline.weight(.semibold))
+                        .frame(width: 46, height: 46).glass(23)
+                        Text(downloadLabel(item)).font(.caption2.weight(.semibold)).foregroundStyle(Theme.sub)
                     }
-                    .padding(.horizontal, 14).frame(minHeight: 44).glass(22)
+                    Spacer()
                 }
             }
             .padding(20)
@@ -250,6 +258,67 @@ struct MoviePreview: View {
         case .paused: return "Paused"
         default: return "\(Int(r.progress * 100))%"
         }
+    }
+}
+
+/// Quick look at a series before opening its episodes (same as the Android app).
+struct SeriesPreview: View {
+    let series: SeriesItem
+    let open: () -> Void
+    @EnvironmentObject var store: AppStore
+    @State private var info: SeriesInfo?
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top, spacing: 16) {
+                    Poster(url: series.cover, title: series.name).frame(width: 112, height: 168)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(series.name).font(.title3.bold()).lineLimit(3)
+                        Text([series.releaseDate.flatMap { $0.count >= 4 ? String($0.prefix(4)) : nil }, "Series"].compactMap { $0 }.joined(separator: " · "))
+                            .font(.footnote).foregroundStyle(Theme.sub)
+                        if let r = series.rating, r > 0 { Label(String(format: "%.1f", r > 10 ? r / 10 : r), systemImage: "star.fill").font(.footnote.bold()).foregroundStyle(Theme.gold) }
+                        if let g = series.genre ?? info?.genre, !g.isEmpty { Text(g).font(.footnote).foregroundStyle(Theme.sub).lineLimit(2) }
+                    }
+                }
+                let plot = series.plot ?? info?.plot
+                Text(plot?.isEmpty == false ? plot! : "No description available for this title.")
+                    .font(.callout).foregroundStyle(plot?.isEmpty == false ? .white.opacity(0.85) : Theme.sub).lineLimit(6)
+                if let c = info?.cast, !c.isEmpty { Text("Starring: \(c)").font(.caption).foregroundStyle(Theme.sub).lineLimit(2) }
+                Button(action: open) {
+                    Label("Episodes & Play", systemImage: "play.fill").font(.headline).frame(maxWidth: .infinity, minHeight: 50)
+                }
+                .buttonStyle(.borderedProminent).tint(.white).foregroundStyle(.black)
+                HStack {
+                    ActionCircle(icon: store.isFav("series:\(series.id)") ? "checkmark" : "plus", label: "My List") { store.toggleFav("series:\(series.id)") }
+                    Spacer()
+                    ActionCircle(icon: "arrow.down.to.line", label: "Download", action: open)
+                    Spacer()
+                    ActionCircle(icon: "play.square.stack", label: "Seasons", action: open)
+                    Spacer()
+                    ActionCircle(icon: "info.circle", label: "Details", action: open)
+                }
+                .padding(.horizontal, 8)
+            }
+            .padding(20)
+        }
+        .task { info = await store.seriesInfo(series.id) }
+    }
+}
+
+/// Round glass button with a caption, as in the Android previews.
+struct ActionCircle: View {
+    let icon: String
+    let label: String
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: icon).font(.system(size: 19, weight: .semibold)).frame(width: 46, height: 46).glass(23)
+                Text(label).font(.caption2.weight(.semibold)).foregroundStyle(Theme.sub)
+            }
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -362,7 +431,7 @@ struct SeriesDetailView: View {
             } label: {
                 HStack(alignment: .top, spacing: 12) {
                     ZStack(alignment: .topLeading) {
-                        Poster(url: ep.image ?? series.cover, title: series.name, radius: 12).frame(width: 132, height: 74)
+                        Poster(url: ep.image ?? series.cover, title: series.name, radius: 12).frame(width: 132, height: 74).clipped()
                             .overlay { if p?.finished == true { Color.black.opacity(0.35).clipShape(RoundedRectangle(cornerRadius: 12)) } }
                         if p?.finished == true { WatchedBadge().padding(5) }
                         if let p, !p.finished, p.fraction > 0 { ProgressLine(fraction: p.fraction).frame(width: 120).padding(.leading, 6).padding(.top, 64) }
