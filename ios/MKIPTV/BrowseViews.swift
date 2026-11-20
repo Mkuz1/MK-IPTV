@@ -55,6 +55,7 @@ struct BrowseView: View {
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: movies ? "Search movies" : "Search series")
             .autocorrectionDisabled()
             .toolbar {
+                ToolbarItem(placement: .topBarTrailing) { AirPlayButton().frame(width: 30, height: 30).accessibilityLabel("AirPlay") }
                 ToolbarItem(placement: .topBarTrailing) { RefreshButton() }
                 ToolbarItem(placement: .topBarTrailing) { PlaylistMenu() }
             }

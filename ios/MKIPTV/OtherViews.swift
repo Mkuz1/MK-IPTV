@@ -89,6 +89,7 @@ struct LiveTVView: View {
             .navigationTitle("Live TV")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarTrailing) { AirPlayButton().frame(width: 30, height: 30).accessibilityLabel("AirPlay") }
                 ToolbarItem(placement: .topBarTrailing) { RefreshButton() }
                 ToolbarItem(placement: .topBarTrailing) { PlaylistMenu() }
             }
@@ -153,6 +154,7 @@ final class LivePreviewModel: ObservableObject {
     private var obs: [NSKeyValueObservation] = []
 
     init() {
+        player.allowsExternalPlayback = false   // the small muted preview stays on the phone; full screen goes to AirPlay
         player.isMuted = true
         player.automaticallyWaitsToMinimizeStalling = true
         player.preventsDisplaySleepDuringVideoPlayback = false
