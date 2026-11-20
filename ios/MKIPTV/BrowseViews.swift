@@ -56,6 +56,7 @@ struct BrowseView: View {
             .autocorrectionDisabled()
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) { AirPlayButton().frame(width: 30, height: 30).accessibilityLabel("AirPlay") }
+                ToolbarItem(placement: .topBarTrailing) { CastButton().frame(width: 30, height: 30).accessibilityLabel("Cast to Chromecast") }
                 ToolbarItem(placement: .topBarTrailing) { RefreshButton() }
                 ToolbarItem(placement: .topBarTrailing) { PlaylistMenu() }
             }

@@ -90,16 +90,17 @@ struct LiveTVView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) { AirPlayButton().frame(width: 30, height: 30).accessibilityLabel("AirPlay") }
+                ToolbarItem(placement: .topBarTrailing) { CastButton().frame(width: 30, height: 30).accessibilityLabel("Cast to Chromecast") }
                 ToolbarItem(placement: .topBarTrailing) { RefreshButton() }
                 ToolbarItem(placement: .topBarTrailing) { PlaylistMenu() }
             }
         }
         .onAppear { preview.resume() }
-        .onDisappear { preview.pause() }
+        .onDisappear { preview.stop() }   // frees the provider connection for whatever plays next
     }
 
     private func openFullscreen(_ ch: LiveChannel, in channels: [LiveChannel]) {
-        preview.pause()
+        preview.stop()   // one connection: many providers allow only one stream at a time
         let list = channels.contains(ch) ? channels : [ch]
         play(store.liveItems(list), list.firstIndex(of: ch) ?? 0)
     }

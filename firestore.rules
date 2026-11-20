@@ -13,41 +13,64 @@ service cloud.firestore {
     function isMember(space) {
       return signedIn() && exists(/databases/$(db)/documents/spaces/$(space)/members/$(request.auth.uid));
     }
+    function str(v, max) { return v is string && v.size() <= max; }
+    // Only the fields the apps write, with sane sizes (stops junk/oversized writes).
+    function okMember(d) {
+      return d.keys().hasOnly(['device', 'platform', 'joinedAt', 'code'])
+        && (!('device' in d) || str(d.device, 200)) && (!('platform' in d) || str(d.platform, 20));
+    }
+    function okItem(d) {
+      return d.keys().hasOnly(['id', 'type', 'profileId', 'key', 'json', 'updatedAt', 'deleted', 'device'])
+        && str(d.id, 600) && str(d.type, 40) && str(d.json, 600000)
+        && (!('key' in d) || str(d.key, 500)) && (!('device' in d) || str(d.device, 200));
+    }
+    function okDevice(d) {
+      return d.keys().hasOnly(['pub', 'uid', 'platform', 'name', 'seenAt'])
+        && str(d.pub, 300) && str(d.platform, 20) && (!('name' in d) || str(d.name, 200));
+    }
     function validLink(code, space) {
       let link = get(/databases/$(db)/documents/links/$(code)).data;
       return link.spaceId == space && link.expiresAt > request.time;
     }
 
     match /users/{uid} {
-      allow read, write: if signedIn() && request.auth.uid == uid;
+      allow read, delete: if signedIn() && request.auth.uid == uid;
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['spaceId']) && str(request.resource.data.spaceId, 128);
     }
 
     match /spaces/{space}/members/{uid} {
       allow read: if isMember(space);
       // A new space is owned by the account that creates it (space id == its uid);
       // anyone else needs an unexpired link code for this space.
-      allow create: if signedIn() && request.auth.uid == uid
+      allow create: if signedIn() && request.auth.uid == uid && okMember(request.resource.data)
         && (space == uid || (request.resource.data.code is string && validLink(request.resource.data.code, space)));
-      allow update: if signedIn() && request.auth.uid == uid;
+      allow update: if signedIn() && request.auth.uid == uid && okMember(request.resource.data);
       allow delete: if isMember(space);
     }
 
     match /spaces/{space}/items/{item} {
-      allow read, write: if isMember(space);
+      allow read, delete: if isMember(space);
+      allow create, update: if isMember(space) && okItem(request.resource.data);
     }
 
     match /spaces/{space}/devices/{device} {
       allow read, delete: if isMember(space);
-      allow create, update: if isMember(space) && request.resource.data.uid == request.auth.uid;
+      allow create, update: if isMember(space) && request.resource.data.uid == request.auth.uid && okDevice(request.resource.data);
     }
 
     match /spaces/{space}/keys/{device} {
-      allow read, write: if isMember(space);
+      allow read, delete: if isMember(space);
+      allow create, update: if isMember(space) && request.resource.data.keys().hasOnly(['eph', 'box'])
+        && str(request.resource.data.eph, 300) && str(request.resource.data.box, 300);
     }
 
     match /links/{code} {
       allow get: if signedIn();
-      allow create: if isMember(request.resource.data.spaceId)
+      allow create: if signedIn() && isMember(request.resource.data.spaceId)
+        && request.resource.data.keys().hasOnly(['spaceId', 'createdBy', 'expiresAt'])
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.expiresAt is timestamp
         && request.resource.data.expiresAt < request.time + duration.value(1, 'h');
       allow delete: if signedIn() && isMember(resource.data.spaceId);
     }

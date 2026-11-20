@@ -10,6 +10,9 @@ packages:
   GoogleSignIn:
     url: https://github.com/google/GoogleSignIn-iOS
     from: "8.0.0"
+  GoogleCast:
+    url: https://github.com/googlecast/google-cast-ios-sdk
+    from: "4.8.6"
 settings:
   base:
     MARKETING_VERSION: "1.7.1"
@@ -28,6 +31,8 @@ targets:
         product: FirebaseFirestore
       - package: GoogleSignIn
         product: GoogleSignIn
+      - package: GoogleCast
+        product: GoogleCastStatic
     scheme: {}
     info:
       path: MKIPTV/Info.plist
@@ -41,6 +46,10 @@ targets:
           UIApplicationSupportsMultipleScenes: true
         UIRequiresFullScreen: false
         UIBackgroundModes: [audio]
+        # Chromecast discovery on the local network (Google Cast SDK, Default Media Receiver CC1AD845).
+        NSBonjourServices: [_googlecast._tcp, _CC1AD845._googlecast._tcp]
+        NSLocalNetworkUsageDescription: MK IPTV uses your local network to find Chromecast and Google TV devices to play on.
+        NSBluetoothAlwaysUsageDescription: MK IPTV may use Bluetooth to find nearby Chromecast devices.
         ITSAppUsesNonExemptEncryption: false
         # Xtream Codes servers are very often plain HTTP.
         NSAppTransportSecurity:
@@ -71,3 +80,4 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         GENERATE_INFOPLIST_FILE: NO
         ENABLE_PREVIEWS: NO
+        OTHER_LDFLAGS: ["$(inherited)", "-ObjC", "-lc++"]

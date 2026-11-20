@@ -11,6 +11,7 @@ final class PlayerModel: ObservableObject {
     @Published var index: Int
     @Published var failure: String?
     @Published var offline = false
+    @Published var castingTo: String?
     private weak var store: AppStore?
     private var timeObserver: Any?
     private var endObserver: NSObjectProtocol?
@@ -20,7 +21,10 @@ final class PlayerModel: ObservableObject {
         self.items = items
         self.index = index
         self.store = store
-        player.automaticallyWaitsToMinimizeStalling = true
+        // Start as soon as the first media arrives instead of pre-buffering several seconds.
+        player.automaticallyWaitsToMinimizeStalling = false
+        CastManager.shared.onSessionChange = { [weak self] on in self?.castChanged(on) }
+        castingTo = CastManager.shared.deviceName
         // Save every 3 seconds while playing.
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 3, preferredTimescale: 1), queue: .main) { [weak self] _ in
             Task { @MainActor in self?.saveProgress() }
@@ -39,9 +43,12 @@ final class PlayerModel: ObservableObject {
         let it = items[i]
         // Downloaded? Play the local file (works offline).
         let isOffline = DownloadManager.shared.localURL(playlistId: it.playlistId, key: it.key) != nil
-        let item = AVPlayerItem(url: DownloadManager.shared.localURL(playlistId: it.playlistId, key: it.key) ?? it.url)
+        let asset = AVURLAsset(url: DownloadManager.shared.localURL(playlistId: it.playlistId, key: it.key) ?? it.url,
+                               options: [AVURLAssetPreferPreciseDurationAndTimingKey: false])
+        let item = AVPlayerItem(asset: asset)
         offline = isOffline
-        item.preferredForwardBufferDuration = it.kind == "live" ? 4 : 20
+        item.preferredForwardBufferDuration = it.kind == "live" ? 2 : 0   // 0 = let iOS decide (fastest start)
+        item.canUseNetworkResourcesForLiveStreamingWhilePaused = false
         let title = AVMutableMetadataItem()
         title.identifier = .commonIdentifierTitle
         title.value = (it.subtitle.map { "\(it.title) · \($0)" } ?? it.title) as NSString
@@ -59,11 +66,39 @@ final class PlayerModel: ObservableObject {
         endObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.finished() }
         }
-        player.replaceCurrentItem(with: item)
-        if it.kind != "live", let p = store?.progress[it.key], !p.finished, p.position > 10 {
-            player.seek(to: CMTime(seconds: p.position, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+        let resumeAt: Double = {
+            guard it.kind != "live", let p = store?.progress[it.key], !p.finished, p.position > 10 else { return 0 }
+            return p.position
+        }()
+        // Casting? Send it to the Chromecast and keep the phone quiet.
+        if CastManager.shared.isCasting, !isOffline, CastManager.shared.cast(it, url: it.url, startAt: resumeAt) {
+            player.replaceCurrentItem(with: nil)
+            return
         }
-        player.play()
+        player.replaceCurrentItem(with: item)
+        if resumeAt > 0 {
+            // A keyframe near the saved position starts much faster than an exact-frame seek.
+            player.seek(to: CMTime(seconds: resumeAt, preferredTimescale: 600),
+                        toleranceBefore: CMTime(seconds: 3, preferredTimescale: 600), toleranceAfter: CMTime(seconds: 3, preferredTimescale: 600))
+        }
+        player.playImmediately(atRate: 1)
+    }
+
+    /// Chromecast connected/disconnected while the player is open: hand playback over.
+    private func castChanged(_ on: Bool) {
+        castingTo = CastManager.shared.deviceName
+        guard items.indices.contains(index) else { return }
+        let it = items[index]
+        if on {
+            let pos = player.currentTime().seconds
+            player.pause()
+            CastManager.shared.cast(it, url: it.url, startAt: pos.isFinite ? pos : 0)
+            player.replaceCurrentItem(with: nil)
+        } else {
+            let pos = it.kind == "live" ? 0 : (CastManager.shared.position() ?? 0)
+            load(index)
+            if pos > 5 { player.seek(to: CMTime(seconds: pos, preferredTimescale: 600)) }
+        }
     }
 
     func next() { if hasNext { load(index + 1) } }
@@ -86,6 +121,7 @@ final class PlayerModel: ObservableObject {
 
     func stop() {
         saveProgress()
+        CastManager.shared.onSessionChange = nil
         player.pause()
         if let t = timeObserver { player.removeTimeObserver(t); timeObserver = nil }
         if let o = endObserver { NotificationCenter.default.removeObserver(o); endObserver = nil }
@@ -192,6 +228,7 @@ private struct PlayerOverlay: View {
                 Spacer()
                 // AirPlay to Apple TV / AirPlay smart TVs.
                 AirPlayButton().frame(width: 40, height: 40).glass(20).accessibilityLabel("AirPlay")
+                CastButton().frame(width: 40, height: 40).glass(20).accessibilityLabel("Cast to Chromecast")
                 // Full-screen landscape on/off (not on Mac, where the window is resized instead).
                 if !ProcessInfo.processInfo.isiOSAppOnMac {
                     Button(action: toggleLandscape) {
@@ -208,6 +245,9 @@ private struct PlayerOverlay: View {
                 }
             }
             .padding(.horizontal, 16).padding(.top, 52)   // below the system player's own top controls
+            if let d = model.castingTo {
+                Label("Playing on \(d)", systemImage: "tv.badge.wifi").font(.callout.weight(.semibold)).padding(14).glass(18).padding(.top, 60)
+            }
             if let f = model.failure {
                 Text(f).font(.callout).multilineTextAlignment(.center).padding(16).glass(18).padding(.horizontal, 24).padding(.top, 60)
             }

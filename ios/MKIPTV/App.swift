@@ -19,6 +19,7 @@ struct MKIPTVApp: App {
         URLCache.shared = URLCache(memoryCapacity: 64 * 1024 * 1024, diskCapacity: 300 * 1024 * 1024)
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
         SyncService.configure()
+        CastManager.setUp()
     }
 
     @Environment(\.scenePhase) private var phase
