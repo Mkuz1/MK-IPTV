@@ -15,10 +15,14 @@ struct BrowseView: View {
     @State private var preview: VodItem?
     @State private var seriesPreview: SeriesItem?
     @State private var path: [SeriesItem] = []
+    @State private var query = ""
 
     var body: some View {
         NavigationStack(path: $path) {
             CatalogGate { cat in
+                if !query.trimmingCharacters(in: .whitespaces).isEmpty {
+                    searchResults(cat)
+                } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 18) {
                         hero(cat)
@@ -45,8 +49,11 @@ struct BrowseView: View {
                     .padding(.bottom, 30)
                 }
                 .background(Theme.bg)
+                }
             }
             .navigationTitle(movies ? "Movies" : "Series")
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: movies ? "Search movies" : "Search series")
+            .autocorrectionDisabled()
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) { RefreshButton() }
                 ToolbarItem(placement: .topBarTrailing) { PlaylistMenu() }
@@ -147,6 +154,53 @@ struct BrowseView: View {
                 let idx = (items.firstIndex { $0.key == p.key } ?? 0) + (p.finished ? 1 : 0)
                 if idx < items.count { play(items, idx) } else { store.toast = "You've watched every episode" }
             }
+        }
+    }
+
+    /// Title search across the whole (non-adult) catalog, best matches first.
+    @ViewBuilder
+    private func searchResults(_ cat: Catalog) -> some View {
+        let allowed = allowedCategories(cat)
+        let vod: [VodItem] = movies ? Self.matches(cat.vod.filter { allowed.contains($0.categoryId ?? "") }, query, name: { $0.name }) : []
+        let ser: [SeriesItem] = movies ? [] : Self.matches(cat.series.filter { allowed.contains($0.categoryId ?? "") }, query, name: { $0.name })
+        ScrollView {
+            if vod.isEmpty && ser.isEmpty {
+                ContentUnavailableView.search(text: query).padding(.top, 60)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 104, maximum: 150), spacing: 10)], spacing: 14) {
+                    ForEach(vod) { v in
+                        Button { preview = v } label: { gridCell(Poster(url: v.poster, title: v.name), v.name) }.buttonStyle(.plain)
+                    }
+                    ForEach(ser) { s in
+                        Button { seriesPreview = s } label: { gridCell(Poster(url: s.cover, title: s.name), s.name) }.buttonStyle(.plain)
+                    }
+                }
+                .padding()
+            }
+        }
+        .background(Theme.bg)
+        .scrollDismissesKeyboard(.immediately)
+    }
+
+    /// Titles containing the query (case/accent-insensitive): starts-with first, then word starts, then anywhere.
+    static func matches<T>(_ items: [T], _ query: String, name: (T) -> String) -> [T] {
+        let opts: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+        let q = query.trimmingCharacters(in: .whitespaces).folding(options: opts, locale: nil)
+        var ranked: [(item: T, rank: Int, name: String)] = []
+        for it in items {
+            let n = name(it).folding(options: opts, locale: nil)
+            let r: Int
+            if n.hasPrefix(q) { r = 0 } else if n.contains(" " + q) { r = 1 } else if n.contains(q) { r = 2 } else { continue }
+            ranked.append((it, r, n))
+        }
+        ranked.sort { a, b in a.rank != b.rank ? a.rank < b.rank : a.name < b.name }
+        return ranked.prefix(200).map { $0.item }
+    }
+
+    private func gridCell(_ poster: Poster, _ title: String) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            poster.aspectRatio(2 / 3, contentMode: .fit)
+            Text(title).font(.caption.weight(.semibold)).foregroundStyle(Theme.sub).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

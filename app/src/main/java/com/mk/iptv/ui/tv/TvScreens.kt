@@ -532,7 +532,17 @@ fun TvLive(catalog: Catalog, session: Session) {
     LaunchedEffect(focusedCh) { delay(700); focusedCh?.let { playing = it } }   // preview follows focus (debounced)
     // Silent preview; OK opens the channel full screen with sound.
     val player = remember { com.mk.iptv.player.Players.build(ctx, MkApp.graph.downloads.upstream, preview = true).apply { volume = 0f } }
-    DisposableEffect(Unit) { onDispose { player.release() } }
+    // Free the TV's video decoder whenever the full-screen player (or anything else) takes over;
+    // many TV boxes have only one hardware decoder and the full-screen player would never start.
+    val lifecycle = androidx.compose.ui.platform.LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, ev ->
+            if (ev == androidx.lifecycle.Lifecycle.Event.ON_PAUSE) player.stop()
+            if (ev == androidx.lifecycle.Lifecycle.Event.ON_RESUME && player.mediaItemCount > 0) { player.prepare(); player.playWhenReady = true }
+        }
+        lifecycle.addObserver(obs)
+        onDispose { lifecycle.removeObserver(obs); player.release() }
+    }
     LaunchedEffect(playing?.id) {
         val ch = playing ?: return@LaunchedEffect
         val url = XtreamApi.liveUrl(MkApp.graph.catalog.creds(pl), ch.id, liveFormats(session).first())
@@ -555,7 +565,7 @@ fun TvLive(catalog: Catalog, session: Session) {
                     MkApp.graph.store.toggleFavorite(session.profileId, "live:${ch.id}")
                     com.mk.iptv.ui.toast(ctx, if (was) "Removed ${ch.name} from Favorites" else "Added ${ch.name} to Favorites")
                 }) {
-                    player.pause()
+                    player.stop()
                     Playback.launch(ctx, PlayQueue(Playback.liveItems(pl, channels), channels.indexOf(ch)))
                 } }
             }

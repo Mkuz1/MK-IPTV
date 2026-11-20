@@ -32,7 +32,7 @@ object Device {
  * - one shared bandwidth estimate so every stream starts at the right quality immediately,
  * - MPEG-TS live streams start without waiting for a keyframe,
  * - automatic fallback to a software decoder if a hardware decoder fails,
- * - fast keyframe seeking, and tunneled (hardware) playback on Android TV.
+ * - fast keyframe seeking.
  */
 object Players {
     fun extractors(): DefaultExtractorsFactory = DefaultExtractorsFactory()
@@ -59,7 +59,7 @@ object Players {
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
         val selector = DefaultTrackSelector(ctx).apply {
             parameters = buildUponParameters()
-                .setTunnelingEnabled(tv && !preview)
+                .setTunnelingEnabled(false)   // tunneled playback stalls on many TV boxes with IPTV streams
                 .setPreferredAudioLanguage(java.util.Locale.getDefault().language)
                 .setExceedRendererCapabilitiesIfNecessary(true)
                 .build()

@@ -230,6 +230,26 @@ class PlayerActivity : AppCompatActivity() {
             exo.setMediaSource(source, startAt)
             exo.prepare()
             exo.playWhenReady = airplay.value == null
+            watchStart(i)
+        }
+    }
+
+    /** If a stream hasn't started after 15 s, try the other live format, then say so instead of a silent black screen. */
+    private var startWatch: Job? = null
+    private fun watchStart(i: Int) {
+        startWatch?.cancel()
+        startWatch = lifecycleScope.launch {
+            delay(15_000)
+            if (index.intValue != i || player.value !== exo || airplay.value != null) return@launch
+            if (exo.playbackState == Player.STATE_READY || exo.playbackState == Player.STATE_ENDED || error.value != null) return@launch
+            val item = current ?: return@launch
+            if (!triedAlt && item.altUrl != null) {
+                triedAlt = true
+                val other = if (localUrl(item) == item.url) item.altUrl else item.url
+                exo.setMediaSource(Players.mediaSourceFactory(this@PlayerActivity, graph.downloads.upstream).createMediaSource(mediaItem(item, other, forCast = false)))
+                exo.prepare(); exo.play()
+                watchStart(i)
+            } else error.value = "This title isn't starting. The server may be slow or offline — press Retry or try again later."
         }
     }
 

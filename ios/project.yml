@@ -12,7 +12,7 @@ packages:
     from: "8.0.0"
 settings:
   base:
-    MARKETING_VERSION: "1.7.0"
+    MARKETING_VERSION: "1.7.1"
     CURRENT_PROJECT_VERSION: "8"
     SWIFT_VERSION: "5.0"
 targets:

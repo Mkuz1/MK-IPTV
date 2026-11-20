@@ -126,8 +126,8 @@ fun LiveScreen(catalog: Catalog, session: Session) {
         }
         player.addListener(l)
         val obs = LifecycleEventObserver { _, ev ->
-            if (ev == Lifecycle.Event.ON_STOP) player.pause()
-            if (ev == Lifecycle.Event.ON_START && player.mediaItemCount > 0) player.play()
+            if (ev == Lifecycle.Event.ON_STOP) player.stop()   // frees the video decoder for the full-screen player
+            if (ev == Lifecycle.Event.ON_START && player.mediaItemCount > 0) { player.prepare(); player.play() }
         }
         lifecycle.addObserver(obs)
         onDispose { lifecycle.removeObserver(obs); player.removeListener(l); player.release() }

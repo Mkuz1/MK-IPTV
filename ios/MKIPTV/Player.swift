@@ -103,11 +103,26 @@ struct SystemPlayer: UIViewControllerRepresentable {
         vc.canStartPictureInPictureAutomaticallyFromInline = true
         vc.updatesNowPlayingInfoCenter = true
         vc.videoGravity = .resizeAspect
+        player.allowsExternalPlayback = true
+        player.usesExternalPlaybackWhileExternalScreenIsActive = true
         return vc
     }
     func updateUIViewController(_ vc: AVPlayerViewController, context: Context) {
         if vc.player !== player { vc.player = player }
     }
+}
+
+/// System AirPlay picker: Apple TV, AirPlay 2 smart TVs and speakers. Shows the device list when tapped.
+struct AirPlayButton: UIViewRepresentable {
+    func makeUIView(context: Context) -> AVRoutePickerView {
+        let v = AVRoutePickerView()
+        v.prioritizesVideoDevices = true
+        v.tintColor = .white
+        v.activeTintColor = UIColor(red: 0.55, green: 0.75, blue: 1, alpha: 1)
+        v.backgroundColor = .clear
+        return v
+    }
+    func updateUIView(_ v: AVRoutePickerView, context: Context) {}
 }
 
 /// Rotates the window (iOS 16+ API); used by the full-screen landscape button.
@@ -175,12 +190,16 @@ private struct PlayerOverlay: View {
                     if model.offline { Label("Offline", systemImage: "arrow.down.circle.fill").font(.caption2.weight(.bold)).foregroundStyle(Theme.green) }
                 }
                 Spacer()
-                // Full-screen landscape on/off.
-                Button(action: toggleLandscape) {
-                    Image(systemName: landscape ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right").font(.headline).frame(width: 40, height: 40)
+                // AirPlay to Apple TV / AirPlay smart TVs.
+                AirPlayButton().frame(width: 40, height: 40).glass(20).accessibilityLabel("AirPlay")
+                // Full-screen landscape on/off (not on Mac, where the window is resized instead).
+                if !ProcessInfo.processInfo.isiOSAppOnMac {
+                    Button(action: toggleLandscape) {
+                        Image(systemName: landscape ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right").font(.headline).frame(width: 40, height: 40)
+                    }
+                    .glass(20)
+                    .accessibilityLabel(landscape ? "Exit full screen" : "Full screen landscape")
                 }
-                .glass(20)
-                .accessibilityLabel(landscape ? "Exit full screen" : "Full screen landscape")
                 if model.current.kind == "live" {
                     Button { model.load(model.index - 1) } label: { Image(systemName: "chevron.up").frame(width: 40, height: 40) }.glass(20).disabled(model.index == 0)
                     Button { model.next() } label: { Image(systemName: "chevron.down").frame(width: 40, height: 40) }.glass(20).disabled(!model.hasNext)
