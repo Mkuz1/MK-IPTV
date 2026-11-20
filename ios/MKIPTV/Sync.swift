@@ -7,6 +7,7 @@ import FirebaseCore
 import FirebaseAuth
 import FirebaseFirestore
 import GoogleSignIn
+import FirebaseAppCheck
 
 // Account sync, compatible with the Android / Google TV app (same Firestore layout and item format):
 //   spaces/{space}/items/{type~profileId~key} = { id, type, profileId, key, json, updatedAt(ms), deleted, device }
@@ -65,6 +66,8 @@ final class SyncService: ObservableObject {
     /// Called once at launch.
     static func configure() {
         guard Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil, FirebaseApp.app() == nil else { return }
+        // App Check: only genuine MK IPTV installs (verified by Apple App Attest) get sync access tokens.
+        AppCheck.setAppCheckProviderFactory(MKAppCheckFactory())
         FirebaseApp.configure()
     }
 
@@ -746,5 +749,17 @@ struct SyncSettingsSection: View {
             Button { entering = true } label: { Label("Enter a code", systemImage: "link") }
             Button { sync.startWithCode() } label: { Label("Get a code (no account)", systemImage: "qrcode") }
         }
+    }
+}
+
+
+/// App Attest on real devices (iOS 14+); nothing on the simulator.
+final class MKAppCheckFactory: NSObject, AppCheckProviderFactory {
+    func createProvider(with app: FirebaseApp) -> AppCheckProvider? {
+        #if targetEnvironment(simulator)
+        return nil
+        #else
+        return AppAttestProvider(app: app)
+        #endif
     }
 }

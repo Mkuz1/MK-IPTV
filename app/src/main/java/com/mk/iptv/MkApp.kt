@@ -23,6 +23,12 @@ class MkApp : Application(), ImageLoaderFactory {
         CrashReporter.install(this)
         // Media3 logs can include stream URLs (which contain Xtream credentials): keep them out of release logcat.
         if (!BuildConfig.DEBUG) androidx.media3.common.util.Log.setLogLevel(androidx.media3.common.util.Log.LOG_LEVEL_OFF)
+        // App Check: only genuine MK IPTV installs (verified by Google Play Integrity) get sync access tokens.
+        runCatching {
+            if (com.google.firebase.FirebaseApp.getApps(this).isNotEmpty())
+                com.google.firebase.appcheck.FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
+                    com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory.getInstance())
+        }
         graph = AppGraph(this)
         seedDemoPlaylist()
         runCatching { graph.sync.resume() }

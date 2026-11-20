@@ -23,8 +23,8 @@ android {
         applicationId = "com.mkuz.iptv"
         minSdk = 24
         targetSdk = 36
-        versionCode = 14
-        versionName = "1.7.4"
+        versionCode = 15
+        versionName = "1.7.5"
         // In-app update feed: version.json + the APK attached to the latest release of this (public) repo.
         buildConfigField("String", "UPDATE_URL", "\"https://github.com/Mkuz1/MK-IPTV/releases/latest/download/version.json\"")
     }
@@ -125,6 +125,7 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
+    implementation("com.google.firebase:firebase-appcheck-playintegrity")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
     implementation("androidx.credentials:credentials:1.3.0")
     implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
