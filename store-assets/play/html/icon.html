@@ -1,0 +1,49 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+html,body{margin:0;width:512px;height:512px;overflow:hidden;background:#06070C}
+</style></head><body>
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#2A1F6B"/><stop offset=".55" stop-color="#0E1530"/><stop offset="1" stop-color="#05060B"/>
+  </linearGradient>
+  <radialGradient id="glowA" cx=".28" cy=".22" r=".6">
+    <stop offset="0" stop-color="#7CC4FF" stop-opacity=".55"/><stop offset="1" stop-color="#7CC4FF" stop-opacity="0"/>
+  </radialGradient>
+  <radialGradient id="glowB" cx=".85" cy=".9" r=".55">
+    <stop offset="0" stop-color="#FF4F8B" stop-opacity=".45"/><stop offset="1" stop-color="#FF4F8B" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="aurora" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#7CE0FF"/><stop offset=".5" stop-color="#9B7BFF"/><stop offset="1" stop-color="#FF5C8A"/>
+  </linearGradient>
+  <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#ffffff" stop-opacity=".22"/><stop offset="1" stop-color="#ffffff" stop-opacity=".04"/>
+  </linearGradient>
+  <linearGradient id="play" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#CFE6FF"/>
+  </linearGradient>
+  <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="14"/></filter>
+  <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#000" flood-opacity=".55"/></filter>
+</defs>
+<rect width="512" height="512" fill="url(#bg)"/>
+<rect width="512" height="512" fill="url(#glowA)"/>
+<rect width="512" height="512" fill="url(#glowB)"/>
+<!-- broadcast arcs -->
+<g fill="none" stroke="url(#aurora)" stroke-linecap="round">
+  <path d="M150 128 A170 170 0 0 1 362 128" stroke-width="16" opacity=".95"/>
+  <path d="M190 92 A130 130 0 0 1 322 92" stroke-width="12" opacity=".6" transform="translate(0,-6)"/>
+</g>
+<!-- aurora screen ring glow -->
+<rect x="96" y="150" width="320" height="236" rx="64" fill="none" stroke="url(#aurora)" stroke-width="22" filter="url(#soft)" opacity=".9"/>
+<!-- screen -->
+<g filter="url(#shadow)">
+  <rect x="96" y="150" width="320" height="236" rx="64" fill="#0B0F22"/>
+  <rect x="96" y="150" width="320" height="236" rx="64" fill="url(#glass)"/>
+  <rect x="96" y="150" width="320" height="236" rx="64" fill="none" stroke="url(#aurora)" stroke-width="10"/>
+</g>
+<!-- play glyph -->
+<path d="M226 214 Q214 207 214 221 L214 315 Q214 329 226 322 L310 275 Q322 268 310 261 Z" fill="url(#play)"/>
+<!-- stand -->
+<rect x="206" y="404" width="100" height="14" rx="7" fill="url(#aurora)" opacity=".9"/>
+<!-- glass highlight -->
+<path d="M126 176 Q150 162 200 160" stroke="#fff" stroke-opacity=".35" stroke-width="6" fill="none" stroke-linecap="round"/>
+</svg></body></html>
