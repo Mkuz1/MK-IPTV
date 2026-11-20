@@ -90,7 +90,7 @@ struct LiveTVView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) { AirPlayButton().frame(width: 30, height: 30).accessibilityLabel("AirPlay") }
-                ToolbarItem(placement: .topBarTrailing) { CastButton().frame(width: 30, height: 30).accessibilityLabel("Cast to Chromecast") }
+                ToolbarItem(placement: .topBarTrailing) { CastButton() }
                 ToolbarItem(placement: .topBarTrailing) { RefreshButton() }
                 ToolbarItem(placement: .topBarTrailing) { PlaylistMenu() }
             }

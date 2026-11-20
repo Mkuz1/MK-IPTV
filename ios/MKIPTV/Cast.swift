@@ -15,11 +15,23 @@ final class CastManager: NSObject, ObservableObject, GCKSessionManagerListener {
         let options = GCKCastOptions(discoveryCriteria: criteria)
         options.physicalVolumeButtonsWillControlDeviceVolume = true
         options.stopReceiverApplicationWhenEndingSession = true
+        // Our own always-visible Cast button starts discovery (the stock button hides itself when
+        // nothing is found, so people never see it). Discovery (and the local-network prompt) starts on first tap.
         GCKCastContext.setSharedInstanceWith(options)
         GCKCastContext.sharedInstance().useDefaultExpandedMediaControls = true
         GCKLogger.sharedInstance().delegate = nil
         GCKCastContext.sharedInstance().sessionManager.add(shared)
         shared.deviceName = GCKCastContext.sharedInstance().sessionManager.currentCastSession?.device.friendlyName
+        // Used Cast before (permission already given): look for devices right away so the list is ready.
+        if UserDefaults.standard.bool(forKey: "cast.used") { GCKCastContext.sharedInstance().discoveryManager.startDiscovery() }
+    }
+
+    /// Cast button tapped: start looking for Chromecasts and show the device list (or the casting controls).
+    func showPicker() {
+        UserDefaults.standard.set(true, forKey: "cast.used")
+        let ctx = GCKCastContext.sharedInstance()
+        if !ctx.discoveryManager.discoveryActive { ctx.discoveryManager.startDiscovery() }
+        ctx.presentCastDialog()
     }
 
     var session: GCKCastSession? { GCKCastContext.sharedInstance().sessionManager.currentCastSession }
@@ -73,12 +85,46 @@ final class CastManager: NSObject, ObservableObject, GCKSessionManagerListener {
     }
 }
 
-/// The standard Cast button: shows the device list, and the casting controls while connected.
-struct CastButton: UIViewRepresentable {
-    func makeUIView(context: Context) -> GCKUICastButton {
-        let b = GCKUICastButton(frame: CGRect(x: 0, y: 0, width: 24, height: 24))
-        b.tintColor = .white
-        return b
+/// Always-visible Cast button (the Google Cast icon). Filled while casting.
+struct CastButton: View {
+    @ObservedObject private var cast = CastManager.shared
+    var body: some View {
+        Button { cast.showPicker() } label: {
+            CastGlyph(connected: cast.deviceName != nil)
+                .frame(width: 22, height: 22)
+                .foregroundStyle(cast.deviceName != nil ? Theme.accent : .white)
+                .frame(width: 30, height: 30)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(cast.deviceName.map { "Casting to \($0)" } ?? "Cast to Chromecast")
     }
-    func updateUIView(_ v: GCKUICastButton, context: Context) {}
+}
+
+/// The standard Cast icon: a screen with broadcast waves in the bottom-left corner.
+struct CastGlyph: View {
+    var connected = false
+    var body: some View {
+        Canvas { ctx, size in
+            let u = min(size.width, size.height) / 24
+            func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: x * u, y: y * u) }
+            let stroke = StrokeStyle(lineWidth: 2 * u, lineCap: .round, lineJoin: .round)
+            var screen = Path()
+            screen.move(to: p(2, 8)); screen.addLine(to: p(2, 4)); screen.addLine(to: p(22, 4))
+            screen.addLine(to: p(22, 20)); screen.addLine(to: p(15, 20))
+            ctx.stroke(screen, with: .foreground, style: stroke)
+            if connected {
+                ctx.fill(Path(CGRect(x: 5 * u, y: 7 * u, width: 14 * u, height: 10 * u)), with: .foreground)
+            }
+            for r in [CGFloat(6), 10] {
+                var a = Path()
+                a.addArc(center: p(2, 21), radius: r * u, startAngle: .degrees(-90), endAngle: .degrees(0), clockwise: false)
+                ctx.stroke(a, with: .foreground, style: stroke)
+            }
+            var dot = Path()
+            dot.move(to: p(2, 21)); dot.addArc(center: p(2, 21), radius: 2.6 * u, startAngle: .degrees(-90), endAngle: .degrees(0), clockwise: false)
+            dot.closeSubpath()
+            ctx.fill(dot, with: .foreground)
+        }
+    }
 }
