@@ -32,7 +32,7 @@ object Device {
  * - one shared bandwidth estimate so every stream starts at the right quality immediately,
  * - MPEG-TS live streams start without waiting for a keyframe,
  * - automatic fallback to a software decoder if a hardware decoder fails,
- * - fast keyframe seeking.
+ * - exact seeking (skip buttons always move the right way).
  */
 object Players {
     fun extractors(): DefaultExtractorsFactory = DefaultExtractorsFactory()
@@ -73,6 +73,6 @@ object Players {
             .setSeekForwardIncrementMs(10_000)
             .setHandleAudioBecomingNoisy(true)
             .build()
-            .apply { setSeekParameters(SeekParameters.CLOSEST_SYNC) }
+            .apply { setSeekParameters(SeekParameters.DEFAULT) }   // exact: +10 s never snaps back to an earlier keyframe
     }
 }

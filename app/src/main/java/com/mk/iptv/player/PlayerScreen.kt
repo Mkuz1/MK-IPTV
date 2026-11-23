@@ -57,6 +57,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.foundation.border
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -66,6 +67,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -112,8 +119,10 @@ fun PlayerScreen(a: PlayerActivity) {
     val playing = if (airplay != null) a.airplayPlaying.value else a.isPlaying.value
 
     // auto-hide controls
-    LaunchedEffect(visible, interaction, playing, sheet, scrubbing) {
-        if (visible && playing && sheet == Sheet.NONE && !scrubbing && !remote) { delay(4000); visible = false }
+    val remoteScrub = a.scrubTarget.longValue >= 0
+    LaunchedEffect(visible, interaction, playing, sheet, scrubbing, remoteScrub) {
+        // TV: longer, so the controls don't vanish while you're moving between buttons with the remote.
+        if (visible && playing && sheet == Sheet.NONE && !scrubbing && !remoteScrub && !remote) { delay(if (tv) 8000 else 4000); visible = false }
     }
     val bump = { interaction++ }
 
@@ -263,8 +272,9 @@ fun PlayerScreen(a: PlayerActivity) {
                         val dur = a.duration.longValue
                         if (!live && dur > 0) {
                             val pos = a.position.longValue
+                            var barFocused by remember { mutableStateOf(false) }
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(fmt(if (scrubbing) (scrubValue * dur).toLong() else pos), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                Text(fmt(if (scrubbing) (scrubValue * dur).toLong() else pos), color = Color.White, fontSize = if (barFocused) 16.sp else 13.sp, fontWeight = FontWeight.Bold)
                                 Slider(
                                     value = if (scrubbing) scrubValue else (pos.toFloat() / dur).coerceIn(0f, 1f),
                                     onValueChange = { scrubbing = true; scrubValue = it; bump() },
@@ -274,7 +284,12 @@ fun PlayerScreen(a: PlayerActivity) {
                                         scrubbing = false
                                     },
                                     colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Mk.Accent, inactiveTrackColor = Color.White.copy(alpha = .25f)),
-                                    thumb = { Box(Modifier.size(18.dp).clip(CircleShape).background(Color.White)) },
+                                    thumb = {
+                                        Box(
+                                            Modifier.size(if (barFocused) 26.dp else 18.dp).clip(CircleShape).background(Color.White)
+                                                .then(if (barFocused) Modifier.border(4.dp, Mk.Accent, CircleShape) else Modifier)
+                                        )
+                                    },
                                     track = { st ->
                                         SliderDefaults.Track(
                                             sliderState = st, modifier = Modifier.height(5.dp),
@@ -282,7 +297,19 @@ fun PlayerScreen(a: PlayerActivity) {
                                             drawStopIndicator = null, thumbTrackGapSize = 0.dp,
                                         )
                                     },
-                                    modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
+                                    modifier = Modifier.weight(1f).padding(horizontal = 12.dp)
+                                        .onFocusChanged { barFocused = it.isFocused }
+                                        // TV remote: left/right scrub (hold to go faster), OK jumps there right away.
+                                        .onPreviewKeyEvent { e ->
+                                            if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                                            val rep = e.nativeKeyEvent.repeatCount
+                                            when (e.key) {
+                                                Key.DirectionLeft -> { a.scrubBy(-a.scrubStep(rep)); bump(); true }
+                                                Key.DirectionRight -> { a.scrubBy(a.scrubStep(rep)); bump(); true }
+                                                Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> { a.commitScrub(); bump(); true }
+                                                else -> false
+                                            }
+                                        },
                                 )
                                 Text("-" + fmt((dur - a.position.longValue).coerceAtLeast(0)), color = Color.White.copy(alpha = .75f), fontSize = 13.sp, fontWeight = FontWeight.Bold)
                             }

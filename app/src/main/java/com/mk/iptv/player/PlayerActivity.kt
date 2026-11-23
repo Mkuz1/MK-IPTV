@@ -93,6 +93,9 @@ class PlayerActivity : AppCompatActivity() {
     /** Time of the last remote-control seek while controls are hidden (shows a small seek bar). */
     val seekOsd = mutableLongStateOf(0L)
     private var osdJob: Job? = null
+    /** Remote scrubbing: where the playhead will go (ms), or -1 when not scrubbing. Applied ~0.7 s after the last press. */
+    val scrubTarget = mutableLongStateOf(-1L)
+    private var scrubJob: Job? = null
 
     /** Hinge position (top, bottom in px) while a foldable is half-open with a horizontal fold ("tabletop"). */
     val tabletopHinge = mutableStateOf<Pair<Int, Int>?>(null)
@@ -166,7 +169,7 @@ class PlayerActivity : AppCompatActivity() {
             var tick = 0
             while (isActive) {
                 player.value?.let { p ->
-                    position.longValue = p.currentPosition.coerceAtLeast(0)
+                    if (scrubTarget.longValue < 0) position.longValue = p.currentPosition.coerceAtLeast(0)
                     duration.longValue = p.duration.takeIf { it != C.TIME_UNSET } ?: 0
                     bufferedPos.longValue = p.bufferedPosition
                 }
@@ -501,26 +504,58 @@ class PlayerActivity : AppCompatActivity() {
     /* ---------------- TV remote / keyboard ---------------- */
 
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
-        if (event.action == android.view.KeyEvent.ACTION_DOWN && handleKey(event.keyCode)) return true
+        if (event.action == android.view.KeyEvent.ACTION_DOWN && handleKey(event.keyCode, event.repeatCount)) return true
         return super.dispatchKeyEvent(event)
+    }
+
+    /** Seek step for a remote press: 10 s, growing while the button is held (30 s, then 60 s). */
+    fun scrubStep(repeat: Int): Long = when {
+        repeat >= 20 -> 60_000L
+        repeat >= 6 -> 30_000L
+        else -> 10_000L
+    }
+
+    /**
+     * Moves the remote scrub position by [deltaMs] (presses add up, so holding → keeps going) and seeks once
+     * the user stops pressing. The seek bar and the on-screen time follow the scrub position immediately.
+     */
+    fun scrubBy(deltaMs: Long) {
+        val p = player.value ?: return
+        if (current?.kind == "live") return
+        val dur = duration.longValue.takeIf { it > 0 } ?: p.duration.takeIf { it > 0 && it != C.TIME_UNSET } ?: Long.MAX_VALUE
+        val base = scrubTarget.longValue.takeIf { it >= 0 } ?: p.currentPosition
+        val target = (base + deltaMs).coerceIn(0, (dur - 1_000).coerceAtLeast(0))
+        scrubTarget.longValue = target
+        position.longValue = target
+        seekOsd.longValue = System.currentTimeMillis()
+        osdJob?.cancel()
+        scrubJob?.cancel()
+        scrubJob = lifecycleScope.launch {
+            delay(700)
+            commitScrub()
+        }
+    }
+
+    /** Applies a pending scrub now (OK pressed on the seek bar, or the user stopped pressing). */
+    fun commitScrub() {
+        val target = scrubTarget.longValue.takeIf { it >= 0 } ?: return
+        scrubJob?.cancel()
+        if (airplay.value != null) airPlaySeekTo(target) else player.value?.seekTo(target)
+        position.longValue = target
+        scrubTarget.longValue = -1
+        osdJob?.cancel()
+        osdJob = lifecycleScope.launch { delay(1500); seekOsd.longValue = 0 }
     }
 
     private fun showControls() { controlsVisible.value = true; interaction.intValue++ }
 
-    private fun osdSeek(deltaMs: Long) {
-        val p = player.value ?: return
-        if (airplay.value != null) airPlaySeekBy(deltaMs) else p.seekTo((p.currentPosition + deltaMs).coerceAtLeast(0))
-        position.longValue = (position.longValue + deltaMs).coerceAtLeast(0)
-        seekOsd.longValue = System.currentTimeMillis()
-        osdJob?.cancel()
-        osdJob = lifecycleScope.launch { delay(1800); seekOsd.longValue = 0 }
-    }
+    private fun osdSeek(deltaMs: Long) = scrubBy(deltaMs)
 
     private fun togglePlay() {
         if (airplay.value != null) airPlayToggle() else player.value?.let { if (it.isPlaying) it.pause() else it.play() }
     }
 
-    private fun handleKey(code: Int): Boolean {
+    private fun handleKey(code: Int, repeat: Int = 0): Boolean {
         val live = current?.kind == "live"
         when (code) {
             android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, android.view.KeyEvent.KEYCODE_MEDIA_PLAY, android.view.KeyEvent.KEYCODE_MEDIA_PAUSE -> { togglePlay(); showControls(); return true }
@@ -535,11 +570,13 @@ class PlayerActivity : AppCompatActivity() {
             return false
         }
         return when (code) {
+            // OK only brings the controls up (focus on Play/Pause); a second OK pauses.
             android.view.KeyEvent.KEYCODE_DPAD_CENTER, android.view.KeyEvent.KEYCODE_ENTER, android.view.KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                if (!live) togglePlay(); showControls(); true
+                if (scrubTarget.longValue >= 0) commitScrub(); showControls(); true
             }
-            android.view.KeyEvent.KEYCODE_DPAD_LEFT -> { if (live) showControls() else osdSeek(-10_000); true }
-            android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> { if (live) showControls() else osdSeek(10_000); true }
+            // Left/right scrub (hold to go faster); the seek happens when you let go.
+            android.view.KeyEvent.KEYCODE_DPAD_LEFT -> { if (live) showControls() else scrubBy(-scrubStep(repeat)); true }
+            android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> { if (live) showControls() else scrubBy(scrubStep(repeat)); true }
             android.view.KeyEvent.KEYCODE_DPAD_UP -> { if (live) prev() else showControls(); true }
             android.view.KeyEvent.KEYCODE_DPAD_DOWN -> { if (live) next() else showControls(); true }
             else -> false
