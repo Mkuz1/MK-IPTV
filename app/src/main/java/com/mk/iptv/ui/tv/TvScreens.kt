@@ -543,10 +543,27 @@ fun TvLive(catalog: Catalog, session: Session) {
         lifecycle.addObserver(obs)
         onDispose { lifecycle.removeObserver(obs); player.release() }
     }
+    fun previewItem(url: String) = MediaItem.Builder().setUri(url)
+        .apply { if (url.endsWith(".m3u8")) setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8) }.build()
+    // If the first format fails (many servers only offer HLS, or only MPEG-TS), try the other one once.
+    DisposableEffect(player) {
+        val l = object : androidx.media3.common.Player.Listener {
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                val ch = playing ?: return
+                val cur = player.currentMediaItem?.localConfiguration?.uri?.toString().orEmpty()
+                val (first, second) = liveFormats(session)
+                if (cur.endsWith(".$first")) {
+                    player.setMediaItem(previewItem(XtreamApi.liveUrl(MkApp.graph.catalog.creds(pl), ch.id, second))); player.prepare(); player.play()
+                }
+            }
+        }
+        player.addListener(l)
+        onDispose { player.removeListener(l) }
+    }
     LaunchedEffect(playing?.id) {
         val ch = playing ?: return@LaunchedEffect
         val url = XtreamApi.liveUrl(MkApp.graph.catalog.creds(pl), ch.id, liveFormats(session).first())
-        player.setMediaItem(MediaItem.fromUri(url)); player.prepare(); player.playWhenReady = true
+        player.setMediaItem(previewItem(url)); player.prepare(); player.playWhenReady = true
     }
     val counts = remember(catalog) { catalog.live.groupingBy { it.categoryId }.eachCount() }
     Row(Modifier.fillMaxSize().padding(24.dp)) {

@@ -214,14 +214,12 @@ enum XtreamAPI {
     }
 
     static func liveURL(_ c: Creds, _ id: Int, ext: String = "m3u8") -> URL? {
-        if Demo.isDemo(c.server) { return URL(string: Demo.stream) }
         return URL(string: "\(c.server)/live/\(c.username)/\(c.password)/\(id).\(ext)")
     }
     static func movieURL(_ c: Creds, _ id: Int, ext: String) -> URL? { URL(string: "\(c.server)/movie/\(c.username)/\(c.password)/\(id).\(ext.isEmpty ? "mp4" : ext)") }
     static func episodeURL(_ c: Creds, _ id: String, ext: String) -> URL? { URL(string: "\(c.server)/series/\(c.username)/\(c.password)/\(id).\(ext.isEmpty ? "mp4" : ext)") }
 
     static func call(_ c: Creds, action: String?, params: [String: String] = [:]) async throws -> Any {
-        if Demo.isDemo(c.server) { return Demo.api(c, action: action) }
         guard var comps = URLComponents(string: c.server + "/player_api.php") else { throw XtreamError.badURL }
         var q = [URLQueryItem(name: "username", value: c.username), URLQueryItem(name: "password", value: c.password)]
         if let action { q.append(URLQueryItem(name: "action", value: action)) }
@@ -359,26 +357,15 @@ enum Keychain {
 // MARK: - Built-in demo playlist
 
 /// Lets anyone try the app without an IPTV subscription (added on first launch, removable like any playlist).
-/// Server `demo`, username `demo`, password `demo`; answered on the device with one live channel,
-/// Al Quran Al Kareem TV (Makkah Live), played from the broadcaster's public HLS stream. Same as the Android app.
+/// It is an ordinary Xtream Codes playlist on MK IPTV's public demo server (tools/demo-server in the repo):
+/// username `demo`, password `demo`. Public content only: Al Quran Al Kareem TV live, and public-domain NASA
+/// films and a NASA series. The app treats it exactly like any other playlist. Same as the Android app.
 enum Demo {
-    static let server = "http://demo"
+    static let server = "https://mk-iptv-demo.mk-uz02.workers.dev"
     static let user = "demo"
     static let pass = "demo"
-    static let channel = "Al Quran Al Kareem TV (Makkah Live)"
-    static let stream = "http://m.live.net.sa:1935/live/quran/playlist.m3u8"
-    static let playlistName = "Makkah Live (Demo)"
+    static let playlistName = "MK IPTV Demo"
 
-    static func isDemo(_ server: String) -> Bool { URL(string: server)?.host?.lowercased() == "demo" }
-
-    static func api(_ c: Creds, action: String?) -> Any {
-        guard c.username == user, c.password == pass else { return ["user_info": ["auth": 0]] }
-        switch action {
-        case nil: return ["user_info": ["username": user, "auth": 1, "status": "Active", "exp_date": "4102444800", "max_connections": "1"]]
-        case "get_live_categories": return [["category_id": "1", "category_name": "Quran"]]
-        case "get_live_streams": return [["num": 1, "name": channel, "stream_id": 1, "stream_icon": "", "epg_channel_id": "", "category_id": "1"] as [String: Any]]
-        case "get_short_epg": return ["epg_listings": [Any]()]
-        default: return [Any]()   // no movies or series in the demo
-        }
-    }
+    /// Playlists created by older versions used the placeholder server "http://demo"; point them at the real server.
+    static func isLegacy(_ server: String) -> Bool { URL(string: server)?.host?.lowercased() == "demo" }
 }

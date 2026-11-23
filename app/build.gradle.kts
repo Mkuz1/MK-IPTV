@@ -23,8 +23,8 @@ android {
         applicationId = "com.mkuz.iptv"
         minSdk = 24
         targetSdk = 36
-        versionCode = 16
-        versionName = "1.7.6"
+        versionCode = 17
+        versionName = "1.7.7"
         // In-app update feed: version.json + the APK attached to the latest release of this (public) repo.
         buildConfigField("String", "UPDATE_URL", "\"https://github.com/Mkuz1/MK-IPTV/releases/latest/download/version.json\"")
     }

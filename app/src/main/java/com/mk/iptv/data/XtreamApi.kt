@@ -39,7 +39,7 @@ class XtreamApi(private val client: OkHttpClient) {
         }
 
         fun liveUrl(c: Creds, id: Int, ext: String = "m3u8") =
-            if (DemoServer.isDemo(c.server)) DemoServer.STREAM else "${c.server}/live/${c.username}/${c.password}/$id.$ext"
+            "${c.server}/live/${c.username}/${c.password}/$id.$ext"
         fun movieUrl(c: Creds, id: Int, ext: String) = "${c.server}/movie/${c.username}/${c.password}/$id.${ext.ifBlank { "mp4" }}"
         fun episodeUrl(c: Creds, id: String, ext: String) = "${c.server}/series/${c.username}/${c.password}/$id.${ext.ifBlank { "mp4" }}"
     }

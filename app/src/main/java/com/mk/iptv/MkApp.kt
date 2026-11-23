@@ -30,6 +30,7 @@ class MkApp : Application(), ImageLoaderFactory {
                     com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory.getInstance())
         }
         graph = AppGraph(this)
+        runCatching { com.mk.iptv.data.DemoServer.migrate(graph.store) }
         seedDemoPlaylist()
         runCatching { graph.sync.resume() }
     }
@@ -42,7 +43,7 @@ class MkApp : Application(), ImageLoaderFactory {
         val store = graph.store
         if (store.data.value.playlists.isNotEmpty()) return
         val pl = com.mk.iptv.data.Playlist(
-            id = LocalStore.newId(), name = com.mk.iptv.data.DemoServer.PLAYLIST_NAME, server = "http://demo",
+            id = LocalStore.newId(), name = com.mk.iptv.data.DemoServer.PLAYLIST_NAME, server = com.mk.iptv.data.DemoServer.SERVER,
             username = com.mk.iptv.data.DemoServer.USER, passwordEnc = com.mk.iptv.data.Crypto.encrypt(com.mk.iptv.data.DemoServer.PASS),
         )
         store.upsertPlaylist(pl)
@@ -78,7 +79,6 @@ class AppGraph(app: Application) {
         .followSslRedirects(true)
         .retryOnConnectionFailure(true)
         // Built-in demo playlist (server "demo", user "demo", password "demo"): answered on-device.
-        .addInterceptor(com.mk.iptv.data.DemoServer(app))
         .build()
     val store = LocalStore(app.filesDir)
     val api = XtreamApi(http)

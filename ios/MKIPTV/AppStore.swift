@@ -49,6 +49,7 @@ final class AppStore: ObservableObject {
             playlists = s.playlists; activeId = s.activeId; favorites = s.favorites
             progress = s.progress; dismissed = s.dismissed; liveCategory = s.liveCategory
         }
+        migrateLegacyDemo()
         seedDemo()
         if activeId == nil { activeId = playlists.first?.id }
     }
@@ -63,6 +64,17 @@ final class AppStore: ObservableObject {
         Keychain.set(Demo.pass, for: p.id)
         playlists.append(p)
         save(notify: false)
+    }
+
+    /// Older versions answered a "http://demo" playlist inside the app; it now lives on the public demo server.
+    private func migrateLegacyDemo() {
+        var changed = false
+        for i in playlists.indices where Demo.isLegacy(playlists[i].server) {
+            playlists[i].server = Demo.server
+            if playlists[i].name == "Makkah Live (Demo)" { playlists[i].name = Demo.playlistName }
+            changed = true
+        }
+        if changed { save(notify: false) }
     }
 
     /// Atomic write; called after every change so progress survives the app being closed or killed.
