@@ -92,6 +92,8 @@ import com.mk.iptv.ui.PrimaryButton
 import com.mk.iptv.ui.glass
 import com.mk.iptv.ui.tap
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 
 internal enum class Sheet { NONE, TRACKS, SPEED, AIRPLAY }
 
@@ -110,6 +112,14 @@ fun PlayerScreen(a: PlayerActivity) {
     val mainBtn = if (compact) 64.dp else 88.dp
     val tv = remember { Device.isTv(a) }
     val playFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    val backFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    val fwdFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    val focusScope = rememberCoroutineScope()
+    // TV: a seek re-renders the controls (buffering, new position), which can move D-pad focus to another
+    // button. Keep it on the button that was pressed so repeated presses keep skipping.
+    val keepFocus: (androidx.compose.ui.focus.FocusRequester) -> Unit = { r ->
+        if (tv) focusScope.launch { for (d in listOf(0L, 120L, 400L, 900L)) { delay(d); runCatching { r.requestFocus() } } }
+    }
     var locked by remember { mutableStateOf(false) }
     var sheet by remember { mutableStateOf(Sheet.NONE) }
     var resize by remember { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
@@ -250,20 +260,20 @@ fun PlayerScreen(a: PlayerActivity) {
                             GlassIconButton(Icons.Rounded.KeyboardArrowUp, { a.prev(); bump() }, size = sideBtn, iconSize = 30.dp, blur = false)
                         } else {
                             GlassIconButton(Icons.Rounded.Replay10, {
-                                if (airplay != null) a.airPlaySeekBy(-10_000) else player?.seekBack(); bump()
-                            }, size = sideBtn, iconSize = 30.dp, blur = false)
+                                if (airplay != null) a.airPlaySeekBy(-10_000) else player?.seekBack(); bump(); keepFocus(backFocus)
+                            }, modifier = Modifier.focusRequester(backFocus), size = sideBtn, iconSize = 30.dp, blur = false, contentDescription = "Back 10 seconds")
                         }
                         Spacer(Modifier.width(48.dp))
                         GlassIconButton(modifier = Modifier.focusRequester(playFocus), icon = if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, onClick = {
                             if (airplay != null) a.airPlayToggle() else player?.let { if (it.isPlaying) it.pause() else it.play() }; bump()
-                        }, size = mainBtn, iconSize = 42.dp, blur = false)
+                        }, size = mainBtn, iconSize = 42.dp, blur = false, contentDescription = if (playing) "Pause" else "Play")
                         Spacer(Modifier.width(48.dp))
                         if (live) {
                             GlassIconButton(Icons.Rounded.KeyboardArrowDown, { a.next(); bump() }, size = sideBtn, iconSize = 30.dp, blur = false)
                         } else {
                             GlassIconButton(Icons.Rounded.Forward10, {
-                                if (airplay != null) a.airPlaySeekBy(10_000) else player?.seekForward(); bump()
-                            }, size = sideBtn, iconSize = 30.dp, blur = false)
+                                if (airplay != null) a.airPlaySeekBy(10_000) else player?.seekForward(); bump(); keepFocus(fwdFocus)
+                            }, modifier = Modifier.focusRequester(fwdFocus), size = sideBtn, iconSize = 30.dp, blur = false, contentDescription = "Forward 10 seconds")
                         }
                     }
                     Spacer(Modifier.weight(1f))
