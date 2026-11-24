@@ -144,8 +144,11 @@ def attach_build(app, ver, wait_minutes=60):
     deadline = time.time() + wait_minutes * 60
     while True:
         st, b = api("GET", f"/v1/builds?filter[app]={app}&filter[preReleaseVersion.platform]={PLATFORM}"
-                           f"&filter[preReleaseVersion.version]={ver['attributes']['versionString']}&sort=-uploadedDate&limit=1")
+                           f"&filter[preReleaseVersion.version]={ver['attributes']['versionString']}&sort=-uploadedDate&limit=1" + (f"&filter[version]={os.environ['BUILD_NUMBER']}" if os.environ.get("BUILD_NUMBER") else ""))
         builds = ok(st, b, "builds")["data"]
+        want = os.environ.get("BUILD_NUMBER")   # wait for this exact build (a fresh upload takes a while to appear)
+        if want and builds and builds[0]["attributes"]["version"] != want:
+            builds = []
         if builds and builds[0]["attributes"]["processingState"] == "VALID":
             build = builds[0]; break
         state = builds[0]["attributes"]["processingState"] if builds else "not uploaded yet"
