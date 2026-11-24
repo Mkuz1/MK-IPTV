@@ -202,7 +202,24 @@ def submit(app, ver):
             print("Version is already part of the rejected submission; resubmitting it")
         elif "already" not in json.dumps(b):
             ok(st, b, "add version to submission")
+    if sub["attributes"]["state"] == "UNRESOLVED_ISSUES":
+        st, items = api("GET", f"/v1/reviewSubmissions/{sub['id']}/items?limit=20")
+        for it in items.get("data", []):
+            st, r = api("PATCH", f"/v1/reviewSubmissionItems/{it['id']}", {"data": {"type": "reviewSubmissionItems", "id": it["id"], "attributes": {"resolved": True}}})
+            print(f"Item {it['id'][:8]} ({it['attributes'].get('state')}) marked resolved: {st}")
     st, b = api("PATCH", f"/v1/reviewSubmissions/{sub['id']}", {"data": {"type": "reviewSubmissions", "id": sub["id"], "attributes": {"submitted": True}}})
+    if st >= 300 and sub["attributes"]["state"] == "UNRESOLVED_ISSUES":
+        print(f"Resubmitting the rejected submission failed ({st}); cancelling it and creating a new one")
+        api("PATCH", f"/v1/reviewSubmissions/{sub['id']}", {"data": {"type": "reviewSubmissions", "id": sub["id"], "attributes": {"canceled": True}}})
+        time.sleep(20)
+        st, b = api("POST", "/v1/reviewSubmissions", {"data": {"type": "reviewSubmissions", "attributes": {"platform": PLATFORM},
+            "relationships": {"app": {"data": {"type": "apps", "id": app}}}}})
+        sub = ok(st, b, "create review submission")["data"]
+        st, b = api("POST", "/v1/reviewSubmissionItems", {"data": {"type": "reviewSubmissionItems",
+            "relationships": {"reviewSubmission": {"data": {"type": "reviewSubmissions", "id": sub["id"]}},
+                              "appStoreVersion": {"data": {"type": "appStoreVersions", "id": ver["id"]}}}}})
+        ok(st, b, "add version to new submission")
+        st, b = api("PATCH", f"/v1/reviewSubmissions/{sub['id']}", {"data": {"type": "reviewSubmissions", "id": sub["id"], "attributes": {"submitted": True}}})
     ok(st, b, "submit")
     print(f"SUBMITTED {NAME} {ver['attributes']['versionString']} for App Review")
 
