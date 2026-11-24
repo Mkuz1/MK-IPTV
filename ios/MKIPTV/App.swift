@@ -150,18 +150,28 @@ struct Toast: ViewModifier {
 struct RootView: View {
     @EnvironmentObject var store: AppStore
     @State private var player: PlayerRequest?
+    @State private var tab = RootView.initialTab
+
+    /// Debug builds can open on a given tab (MK_TAB=live|movies|series|favorites|downloads), used for store screenshots.
+    static var initialTab: String {
+        #if DEBUG
+        return ProcessInfo.processInfo.environment["MK_TAB"] ?? "live"
+        #else
+        return "live"
+        #endif
+    }
 
     var body: some View {
         Group {
             if store.playlists.isEmpty {
                 WelcomeView()
             } else {
-                TabView {
-                    LiveTVView().tabItem { Label("Live TV", systemImage: "tv") }
-                    BrowseView(movies: true).tabItem { Label("Movies", systemImage: "film") }
-                    BrowseView(movies: false).tabItem { Label("Series", systemImage: "play.rectangle.on.rectangle") }
-                    FavoritesView().tabItem { Label("Favorites", systemImage: "heart") }
-                    DownloadsView().tabItem { Label("Downloads", systemImage: "arrow.down.circle") }
+                TabView(selection: $tab) {
+                    LiveTVView().tabItem { Label("Live TV", systemImage: "tv") }.tag("live")
+                    BrowseView(movies: true).tabItem { Label("Movies", systemImage: "film") }.tag("movies")
+                    BrowseView(movies: false).tabItem { Label("Series", systemImage: "play.rectangle.on.rectangle") }.tag("series")
+                    FavoritesView().tabItem { Label("Favorites", systemImage: "heart") }.tag("favorites")
+                    DownloadsView().tabItem { Label("Downloads", systemImage: "arrow.down.circle") }.tag("downloads")
                 }
                 .task(id: store.activeId) { _ = DownloadManager.shared; await store.load() }
                 .sheet(isPresented: $store.showSettings) { SettingsView() }
@@ -170,6 +180,17 @@ struct RootView: View {
         .modifier(Toast(text: $store.toast))
         .environment(\.play, PlayAction { req in player = req })
         .fullScreenCover(item: $player) { req in PlayerScreen(request: req).environmentObject(store) }
+        #if DEBUG && targetEnvironment(macCatalyst)
+        .onAppear {
+            // Store screenshots: a fixed 1440x900 window.
+            if ProcessInfo.processInfo.environment["MK_TAB"] != nil {
+                for s in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
+                    s.sizeRestrictions?.minimumSize = CGSize(width: 1440, height: 900)
+                    s.sizeRestrictions?.maximumSize = CGSize(width: 1440, height: 900)
+                }
+            }
+        }
+        #endif
     }
 }
 

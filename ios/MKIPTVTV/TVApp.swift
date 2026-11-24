@@ -90,19 +90,29 @@ struct ProgressLine: View {
 struct TVRoot: View {
     @EnvironmentObject var store: AppStore
     @State private var player: TVPlayerRequest?
+    @State private var tab = TVRoot.initialTab
+
+    /// Debug builds can open on a given tab (MK_TAB=live|movies|series|favorites|search|settings), used for store screenshots.
+    static var initialTab: String {
+        #if DEBUG
+        return ProcessInfo.processInfo.environment["MK_TAB"] ?? "live"
+        #else
+        return "live"
+        #endif
+    }
 
     var body: some View {
         Group {
             if store.playlists.isEmpty {
                 TVWelcomeView()
             } else {
-                TabView {
-                    TVLiveView().tabItem { Label("Live TV", systemImage: "tv") }
-                    TVBrowseView(movies: true).tabItem { Label("Movies", systemImage: "film") }
-                    TVBrowseView(movies: false).tabItem { Label("Series", systemImage: "play.rectangle.on.rectangle") }
-                    TVFavoritesView().tabItem { Label("Favorites", systemImage: "heart") }
-                    TVSearchView().tabItem { Label("Search", systemImage: "magnifyingglass") }
-                    TVSettingsView().tabItem { Label("Settings", systemImage: "gearshape") }
+                TabView(selection: $tab) {
+                    TVLiveView().tabItem { Label("Live TV", systemImage: "tv") }.tag("live")
+                    TVBrowseView(movies: true).tabItem { Label("Movies", systemImage: "film") }.tag("movies")
+                    TVBrowseView(movies: false).tabItem { Label("Series", systemImage: "play.rectangle.on.rectangle") }.tag("series")
+                    TVFavoritesView().tabItem { Label("Favorites", systemImage: "heart") }.tag("favorites")
+                    TVSearchView().tabItem { Label("Search", systemImage: "magnifyingglass") }.tag("search")
+                    TVSettingsView().tabItem { Label("Settings", systemImage: "gearshape") }.tag("settings")
                 }
                 .task(id: store.activeId) { await store.load() }
             }
