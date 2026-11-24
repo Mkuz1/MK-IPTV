@@ -20,6 +20,12 @@ jobs:
           if [ -n "$X" ]; then sudo xcode-select -s "$X"; fi
           xcodebuild -version
 
+      - name: Firebase config
+        env:
+          GSI: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}
+        run: |
+          case "$GSI" in "<"*) printf '%s' "$GSI" > ios/MKIPTV/GoogleService-Info.plist ;; *) echo "$GSI" | base64 -d > ios/MKIPTV/GoogleService-Info.plist ;; esac
+
       - name: Generate Xcode project
         working-directory: ios
         run: brew install xcodegen && xcodegen generate
