@@ -59,18 +59,19 @@ jobs:
           xcodebuild -project MKIPTV.xcodeproj -scheme MKIPTV -configuration Debug -destination 'generic/platform=macOS,variant=Mac Catalyst' \
             -derivedDataPath build CODE_SIGN_IDENTITY=- CODE_SIGN_ENTITLEMENTS= CODE_SIGNING_REQUIRED=NO build > mac.log 2>&1 || { grep error: mac.log | head -40; exit 1; }
           APP=$(ls -d build/Build/Products/Debug-maccatalyst/*.app | head -1)
-          pip3 install -q --break-system-packages pyobjc-framework-Quartz || pip3 install -q pyobjc-framework-Quartz
+          pip3 install -q --break-system-packages pyobjc-framework-Quartz pillow || pip3 install -q pyobjc-framework-Quartz pillow
           mkdir -p ../store-assets/apple/mac raw
           system_profiler SPDisplaysDataType | grep -i resolution || true
           n=1
           for tab in movies series live favorites; do
-            pkill -x MKIPTV || true; sleep 2
+            pkill -f MKIPTV.app || true; sleep 2
             open --env MK_TAB=$tab "$APP"
             sleep 35
             WID=$(python3 -c "
           import Quartz
           ws = Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionOnScreenOnly, Quartz.kCGNullWindowID)
-          w = [x for x in ws if x.get('kCGWindowOwnerName') == 'MKIPTV' and x.get('kCGWindowLayer') == 0]
+          w = [x for x in ws if 'MK' in (x.get('kCGWindowOwnerName') or '') and x.get('kCGWindowLayer') == 0]
+          print([(x.get('kCGWindowOwnerName'), dict(x['kCGWindowBounds'])) for x in ws if x.get('kCGWindowLayer') == 0], file=__import__('sys').stderr)
           w.sort(key=lambda x: -x['kCGWindowBounds']['Width'] * x['kCGWindowBounds']['Height'])
           print(w[0]['kCGWindowNumber'] if w else '')")
             if [ -n "$WID" ]; then screencapture -x -o -l "$WID" "raw/$tab.png"; else screencapture -x "raw/$tab.png"; fi
@@ -80,11 +81,13 @@ jobs:
           sips -g pixelWidth -g pixelHeight raw/*.png ../store-assets/apple/mac/*.png
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: apple-screenshots
           path: store-assets/apple
 
       - name: Commit screenshots
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
