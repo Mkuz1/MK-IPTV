@@ -1,0 +1,93 @@
+# Builds the Google Play App Bundle, signs it with the Play upload key and uploads it to a Play track.
+#
+# Repository secrets:
+#   KEYSTORE_BASE64            base64 of the Play UPLOAD keystore (certificate "CN=MK IPTV Upload")
+#   KEYSTORE_PASSWORD          its store password
+#   KEY_PASSWORD               its key password
+#   KEY_ALIAS                  its key alias (default: mkiptv)
+#   PLAY_SERVICE_ACCOUNT_JSON  service-account key with access to MK IPTV in Play Console
+#   GOOGLE_SERVICES_JSON       Firebase config (account sync)
+name: Google Play upload
+
+on:
+  workflow_dispatch:
+    inputs:
+      track:
+        description: "Play track"
+        type: choice
+        options: [internal, alpha, beta, production]
+        default: internal
+      mode:
+        description: "validate = check only, draft = upload as draft, release = roll out"
+        type: choice
+        options: [validate, draft, release]
+        default: validate
+      notes:
+        description: "What's new (en-US, max 500 characters)"
+        default: "Bug fixes and improvements."
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check secrets
+        env:
+          A: ${{ secrets.KEYSTORE_BASE64 }}
+          B: ${{ secrets.KEYSTORE_PASSWORD }}
+          C: ${{ secrets.KEY_PASSWORD }}
+          D: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          missing=""
+          [ -n "$A" ] || missing="$missing KEYSTORE_BASE64"
+          [ -n "$B" ] || missing="$missing KEYSTORE_PASSWORD"
+          [ -n "$C" ] || missing="$missing KEY_PASSWORD"
+          [ -n "$D" ] || missing="$missing PLAY_SERVICE_ACCOUNT_JSON"
+          if [ -n "$missing" ]; then echo "::error::Missing repository secrets:$missing"; exit 1; fi
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Restore upload key and Firebase config
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'mkiptv' }}
+          GSJ: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          mkdir -p keystore
+          echo "$KEYSTORE_BASE64" | base64 -d > keystore/play-upload.jks
+          printf 'storeFile=keystore/play-upload.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > keystore.properties
+          keytool -list -v -keystore keystore/play-upload.jks -storepass "$KEYSTORE_PASSWORD" | grep -E "Alias name|Owner" || true
+          if [ -n "$GSJ" ]; then
+            case "$GSJ" in "{"*) printf '%s' "$GSJ" > app/google-services.json ;; *) echo "$GSJ" | base64 -d > app/google-services.json ;; esac
+          else
+            echo "::warning::GOOGLE_SERVICES_JSON not set - account sync disabled in this build"
+          fi
+
+      - name: Build App Bundle
+        run: ./gradlew -q :app:bundlePlayRelease
+
+      - name: Upload to Google Play
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          NOTES: ${{ inputs.notes }}
+        run: |
+          pip install -q google-api-python-client google-auth
+          python3 tools/play_upload.py app/build/outputs/bundle/playRelease/app-play-release.aab "${{ inputs.track }}" "${{ inputs.mode }}" "$NOTES"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MK-IPTV-play-aab
+          path: app/build/outputs/bundle/playRelease/app-play-release.aab
+
+      - name: Remove signing material
+        if: always()
+        run: rm -f keystore/play-upload.jks keystore.properties app/google-services.json
