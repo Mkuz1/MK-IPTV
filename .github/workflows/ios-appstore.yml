@@ -48,6 +48,9 @@ jobs:
           # so archive with an ad-hoc signature (keeps the entitlements) and let the export apply App Store signing.
           if [ "${{ inputs.platform }}" = ios ]; then
             echo "SIGNING=CODE_SIGN_STYLE=Automatic" >> $GITHUB_ENV
+          elif [ "${{ inputs.platform }}" = tvos ]; then
+            # tvOS forbids ad-hoc signing in Xcode: archive unsigned, entitlements are stamped on below.
+            echo "SIGNING=CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO" >> $GITHUB_ENV
           else
             echo "SIGNING=CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO PROVISIONING_PROFILE_SPECIFIER=" >> $GITHUB_ENV
           fi
@@ -103,6 +106,14 @@ jobs:
           grep -E "error:|warning: .*(sign|provision)" archive.log | sort -u | head -60
           tail -5 archive.log
           exit $status
+
+      - name: Stamp entitlements on the unsigned Apple TV archive
+        if: inputs.platform == 'tvos'
+        working-directory: ios
+        run: |
+          APP=$(ls -d build/MKIPTV.xcarchive/Products/Applications/*.app)
+          codesign -f -s - --entitlements MKIPTVTV/MKIPTVTV.entitlements --generate-entitlement-der "$APP"
+          codesign -d --entitlements - "$APP" | head -20
 
       - name: Upload to App Store Connect
         working-directory: ios
