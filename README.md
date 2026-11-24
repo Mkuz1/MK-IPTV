@@ -1,8 +1,30 @@
 # MK IPTV
 
-An Android IPTV player for **Xtream Codes** playlists with a Netflix-style browsing experience and an Apple "liquid glass" inspired design.
+An IPTV player for **Xtream Codes** playlists on **Android phones and tablets, Google TV / Android TV, iPhone, iPad
+and Apple Silicon Macs**, with a streaming-style browsing experience and an Apple "liquid glass" inspired design.
+MK IPTV provides no content of its own: it plays the user's own IPTV service.
 
-## Features
+| Platform | Store | Source |
+|---|---|---|
+| Android phone, tablet, Google TV | Google Play (`com.mkuz.iptv`) | `app/` (Kotlin, Jetpack Compose, Media3) |
+| iPhone, iPad, Mac (Apple Silicon) | App Store (`com.mkuz.mkiptv`) | `ios/` (SwiftUI, AVKit) |
+| Public demo server | `https://mk-iptv-demo.mk-uz02.workers.dev` | `tools/demo-server/` (Cloudflare Worker) |
+
+Builds are also attached to [GitHub Releases](https://github.com/Mkuz1/MK-IPTV/releases) (`android-v*`: APK + AAB, `ios-v*`: IPA for sideloading).
+
+## Built-in demo (try it without a subscription)
+
+On first launch both apps add the playlist **MK IPTV Demo** (removable like any playlist). It is an ordinary
+Xtream Codes account on MK IPTV's public demo server, handled exactly like a user's own provider:
+
+- Server `https://mk-iptv-demo.mk-uz02.workers.dev`, username `demo`, password `demo`.
+- **Live TV**: Al Quran Al Kareem TV (Makkah Live), the public live stream of the Saudi Broadcasting Authority.
+- **Movies**: four public-domain NASA films (Earth from space). **Series**: *NASA Science Live* (4 episodes).
+- The server only answers the standard `player_api.php` API and redirects streams to their public sources; it hosts
+  no video. Deploy changes with `cd tools/demo-server && npx wrangler@3 deploy`.
+- Playlists created by older versions (server `http://demo`) are moved to the real server automatically.
+
+## Android features (phone, tablet, Google TV)
 
 - **Multiple Xtream playlists**: add as many accounts as you like (server URL, username, password). Shows account status, expiry date, connections and channel/movie/series counts. Passwords are encrypted with the Android Keystore.
 - **Profiles ("Who's watching?")**: each profile has its own favorites (My List), watch history and Continue Watching. A profile can be limited to certain playlists. Kids profiles always hide adult categories.
@@ -10,7 +32,7 @@ An Android IPTV player for **Xtream Codes** playlists with a Netflix-style brows
 - **Continue Watching** (Movies and Series tabs): resumes exactly where you stopped, even after the app is closed, killed or the phone restarts. Progress is saved every 3 seconds and on every pause, seek and exit, using durable (fsync'd, atomic) writes. Series show the latest episode, or **Up next** once it's finished. Long-press a card to remove it or mark it watched.
 - **Watched marks**: finished episodes (credits reached) show a green **WATCHED** badge, and partly watched ones show a progress bar with the time left. Long-press an episode to mark it watched or unwatched, or use "Mark season watched".
 - **Favorites**: one place for your My List movies and series and your favorite live channels.
-- **Movies & Series tabs**: a hero banner plus Netflix-style rows (Continue Watching, My List, Recently Added, Top Rated / Top 10, every genre). Tapping a title opens a glass **quick preview** with the poster, year, runtime, age rating, rating, genre, description, cast and director, plus Play / Trailer / My List / Download.
+- **Movies & Series tabs**: a hero banner plus streaming-style rows (Continue Watching, My List, Recently Added, Top Rated / Top 10, every genre). Tapping a title opens a glass **quick preview** with the poster, year, runtime, age rating, rating, genre, description, cast and director, plus Play / Trailer / My List / Download.
 - **Series detail**: seasons, episodes with thumbnails and summaries, resume where you left off, auto-play of the next episode.
 - **Live TV**: Mac Finder-style columns.
   - The left column holds "All channels", "Favorites" and every category with its channel count, plus a filter box.
@@ -29,26 +51,56 @@ An Android IPTV player for **Xtream Codes** playlists with a Netflix-style brows
 - **Player**: liquid-glass controls, ±10s, seek bar, playback speed, screen lock, audio & subtitle track selection, aspect ratio (fit/zoom/fill), picture-in-picture, resume position, automatic HLS → MPEG-TS fallback for live channels.
 - **Search** across movies, series and channels.
 
+## iPhone, iPad and Mac features
+
+A native SwiftUI app (`ios/`, iOS 17+). On Apple Silicon Macs it runs as the iPad app.
+
+- **Live TV**: category list, channel search, and a **muted live preview** of the selected channel with an unmute button (iPad: preview plus a large now/next panel). Tap the selected channel again for full screen.
+- **Movies & Series**: hero banner, Continue Watching (long-press to remove), My List, Recently Added, Top Rated and every category; **search** in both tabs (results as a poster grid, best matches first).
+- **Quick previews**: movie preview with Play / My List / Download; series preview sheet with *Episodes & Play*, My List, Download, Seasons and Details.
+- **Series pages**: seasons, episodes with thumbnails, resume and up-next.
+- **Favorites** and **Downloads** (movies and episodes, watched offline).
+- **Player** (AVPlayerViewController): picture-in-picture, subtitles/audio tracks, speed, resume, next episode, full-screen landscape button (hidden on Mac), fast start (plays as soon as media arrives, keyframe-tolerant resume).
+- **AirPlay** (Apple TV, AirPlay 2 TVs) and **Chromecast** (official Google Cast SDK, Default Media Receiver): buttons on Live TV, Movies, Series and in the player. The Cast button is always visible; tapping it searches the Wi-Fi (local-network permission) and opens the device list. Casting hands over the current title and position, and playback returns to the phone when you disconnect.
+- **Sync** with Sign in with Apple, Google or a link code; the iPhone follows one synced profile (chosen in Settings).
+- Passwords live in the iOS Keychain (this device only); app data is excluded from backups.
+
 ## Sync across devices
 
 Settings › **Sync across devices** keeps playlists, profiles, favorites, Continue Watching, watched episodes and
-preferences identical on Android phones/tablets, Google TV and iPhone. Sign in with Google (or Apple on iPhone), or
-link devices with a one-time 8-character code (no account needed). Changes upload a few seconds after they happen and
-arrive on the other devices live; the newest change wins. *Delete synced data* removes the cloud copy.
+preferences identical on Android phones/tablets, Google TV and iPhone. Sign in with Google (also on Google TV) or
+Apple, or link devices with a one-time 8-character code (no account needed). Changes upload a few seconds after they
+happen and arrive on the other devices live; the newest change wins. **Sync now** forces a full upload and download,
+and sync reconnects by itself after network errors. *Delete synced data* removes the cloud copy.
+
+- **End-to-end encrypted passwords**: playlist passwords are sealed on the device with a library key (AES-256-GCM)
+  before upload. Each device has its own P-256 key pair; the library key is wrapped for every linked device
+  (ECDH + HKDF-SHA256), so Firebase never sees a password. Android and iPhone interoperate.
+- **Firestore rules** (`firestore.rules`) allow only members of a library to read or write it, require a valid,
+  unexpired link code to join someone else's library, and accept only the exact fields the apps write, with size limits.
+- **Firebase App Check** (Play Integrity on Android, App Attest on Apple devices) is installed and registered; it runs
+  in monitoring mode until most installs send verified requests, then enforcement can be turned on for Firestore.
+
 Firebase setup: [docs/SYNC_SETUP.md](docs/SYNC_SETUP.md).
 
 ## One app for phone, tablet and Google TV
 
 A single universal APK detects the device and adapts:
 
-- **Phone**: glass bottom tab bar, Netflix-style rows, quick-preview sheets.
+- **Phone**: glass bottom tab bar, streaming-style rows, quick-preview sheets.
 - **Tablet** (≥ 840 dp, e.g. tablets in landscape and unfolded foldables): floating glass **navigation rail**, larger posters, wide hero with the full poster, and two-pane Live TV and series pages.
 - **Google TV / Android TV**: a dedicated 10-foot interface for the remote.
   - **Left menu**: Search, Live TV, Movies, Series, Favorites, Downloads, Settings.
   - **Movies and Series**: rows with a large hero that shows the focused title's backdrop, rating and description.
   - **Detail pages**: full movie and series pages, with horizontal episode rows and watched badges.
   - **Live TV**: a channel guide whose preview follows focus.
-  - **Remote in the player**: OK = play/pause, ◀ ▶ = seek 10 s, ▲ ▼ = change channel, ⏩ ⏪ = seek 30 s, Channel ± and Next/Previous supported; Back hides the controls first.
+  - **Remote in the player**:
+    - OK brings up the controls (focus on Play/Pause) without pausing; a second OK pauses.
+    - ◀ ▶ scrub through a movie (10 s steps, 30 s then 60 s while held); the seek happens when you let go or press OK. The time and seek bar follow as you scrub.
+    - On the seek bar (▼ from the buttons) ◀ ▶ scrub the same way; the bar shows a large thumb with an accent ring when focused.
+    - +10 / −10 always move the right way (exact seeking) and keep focus when pressed again. Controls stay up 8 s after the last press and never hide while scrubbing.
+    - ▲ ▼ change channel on live TV, ⏩ ⏪ seek 30 s, Channel ± and Next/Previous supported; Back hides the controls first.
+  - **Sign in with Google** for sync works on Google TV (Credential Manager); TVs without it are linked with a code from the phone.
   - The app shows up on the Google TV home screen with its own banner. Cast/AirPlay/PiP are hidden on TV.
 
 ## In-app updates (all devices)
@@ -86,9 +138,11 @@ Every installed copy (phone, tablet, TV) will offer the update.
 - **Instant start-up**: the catalog is cached on disk (gzip). The app opens straight into your library and refreshes it silently in the background.
 - **Fast playback start**: playback begins after ~1 s of buffer (2.5 s after a stall), with a large buffer behind it. Low-RAM TV boxes get a memory-capped buffer.
 - **Right quality from the first second**: one bandwidth estimate is shared across all playback.
-- **Fast channel switching**: live TV uses MPEG-TS first ("Fastest", configurable in Settings → Playback), starts without waiting for a keyframe, and falls back to HLS automatically. Cast always uses HLS.
+- **Fast channel switching**: live TV uses MPEG-TS first ("Fastest", configurable in Settings → Playback), starts without waiting for a keyframe, and falls back to HLS automatically (full-screen player, phone preview and Google TV preview). Cast always uses HLS.
+- **One stream at a time**: the muted live previews release their stream when you leave Live TV or open a channel full screen, so providers that allow a single connection start the next title immediately.
+- **Stall watchdog**: if a title hasn't started after 15 s, the player tries the other live format, then shows a Retry message instead of a black screen.
 - **Connection reuse**: one tuned HTTP client (connection pool, more parallel requests, 10 s connect timeout) is shared by API calls, artwork and video, so streams reuse warm connections.
-- **Resilient decoding**: automatic fallback to a software decoder if a hardware decoder fails. Fast keyframe seeking. **Tunneled playback** on Android TV for smooth 4K.
+- **Resilient decoding**: automatic fallback to a software decoder if a hardware decoder fails. Exact seeking. Tunneled playback is off (it stalls on many TV boxes with IPTV streams).
 
 ## Split-screen, car screens & free-form windows
 
@@ -116,7 +170,7 @@ Every installed copy (phone, tablet, TV) will offer the update.
 
 ## Security & privacy
 
-- **No secrets in the app**: there are no API keys, tokens or backend servers. The app talks only to the Xtream server you enter (plus TVs you choose to cast to).
+- **No secrets in the app**: there are no private API keys or tokens in the app. It talks to the Xtream server you enter, TVs you choose to cast to, and (only if you turn on sync) Firebase, where passwords are end-to-end encrypted (see *Sync across devices*).
 - **Passwords** are encrypted with an AES-256-GCM key held in the Android Keystore. On a device where the Keystore is broken (rare), the password is stored only base64-encoded, inside the app's private storage.
 - **Downloads** store a credential-free internal address (`mkiptv://…`); the real URL is built only at request time, so passwords are never written to the download database (verified by a test).
 - **No backup / device transfer** of app data (playlists, history and downloads stay on the device).
@@ -143,7 +197,21 @@ There are two build variants:
 
 `tools/make-release.sh` produces both: `dist/MK-IPTV-<version>.apk` and `dist/MK-IPTV-<version>-play.aab`. Upload the `.aab` in Play Console. With Play App Signing, the MK IPTV key acts as the **upload key**.
 
-## Building
+## Building (iPhone / iPad / Mac)
+
+Requirements: Xcode 26+ and [XcodeGen](https://github.com/yonaskolb/XcodeGen). `ios/MKIPTV/GoogleService-Info.plist` comes from the Firebase console.
+
+```bash
+cd ios && xcodegen generate
+xcodebuild archive -project MKIPTV.xcodeproj -scheme MKIPTV -destination 'generic/platform=iOS' \
+  -archivePath build/MKIPTV.xcarchive -allowProvisioningUpdates DEVELOPMENT_TEAM=<team> CURRENT_PROJECT_VERSION=<build>
+```
+
+Swift packages: Firebase (Auth, Firestore, App Check), GoogleSignIn, Google Cast (`GoogleCastStatic`, needs `-ObjC -lc++`).
+`.github/workflows/ios-appstore.yml` builds and uploads to App Store Connect; `tools/asc/ascapi.py` is a small
+App Store Connect API helper (uses a local API key, never committed).
+
+## Building (Android)
 
 Requirements: JDK 17+ and the Android SDK (platform 35, build-tools 35).
 
@@ -177,7 +245,13 @@ app/src/main/java/com/mk/iptv/
   download/    Media3 DownloadManager wrapper + foreground download service
   cast/        Google Cast options + route button
   airplay/     Bonjour discovery + AirPlay video session
-  player/      PlayerActivity (ExoPlayer / CastPlayer / AirPlay) + glass controls
-  ui/          Compose screens and liquid-glass components
+  player/      PlayerActivity (ExoPlayer / CastPlayer / AirPlay) + glass controls, TV remote scrubbing
+  sync/        Firebase sync engine, end-to-end encryption (E2e.kt)
+  ui/          Compose screens (ui/tv for Google TV) and liquid-glass components
+ios/           iPhone / iPad / Mac app (SwiftUI): App, Browse, Live/Other views, Player, Cast, Downloads, Sync, E2e
+tools/demo-server/  Public demo Xtream server (Cloudflare Worker)
+tools/asc/     App Store Connect API helper
+tools/store-graphics/, store-assets/, docs/store-graphics/  Store listing artwork and the templates it is rendered from
+firestore.rules  Firestore security rules for sync
 concept/       Original HTML design concept
 ```
