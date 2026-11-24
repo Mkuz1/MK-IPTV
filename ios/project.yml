@@ -3,6 +3,7 @@ options:
   bundleIdPrefix: com.mk
   deploymentTarget:
     iOS: "17.0"
+    tvOS: "17.0"
 packages:
   Firebase:
     url: https://github.com/firebase/firebase-ios-sdk
@@ -35,6 +36,7 @@ targets:
         product: GoogleSignIn
       - package: GoogleCast
         product: GoogleCastStatic
+        platformFilter: iOS   # no Mac build of the Cast SDK
     scheme: {}
     info:
       path: MKIPTV/Info.plist
@@ -66,6 +68,7 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         UIUserInterfaceStyle: Dark
+        LSApplicationCategoryType: public.app-category.entertainment
         # Google Sign-In returns to the app through this URL scheme (REVERSED_CLIENT_ID from GoogleService-Info.plist).
         # Without it GIDSignIn raises an exception and the app crashes.
         CFBundleURLTypes:
@@ -79,6 +82,55 @@ targets:
         PRODUCT_NAME: MKIPTV
         TARGETED_DEVICE_FAMILY: "1,2"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        GENERATE_INFOPLIST_FILE: NO
+        ENABLE_PREVIEWS: NO
+        OTHER_LDFLAGS: ["$(inherited)", "-ObjC", "-lc++"]
+        # Native Mac app (Mac Catalyst) with the same bundle ID: one App Store record, universal purchase.
+        SUPPORTS_MACCATALYST: YES
+        DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER: NO
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+        "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": MKIPTV/MKIPTV-mac.entitlements
+  MKIPTVTV:
+    type: application
+    platform: tvOS
+    sources:
+      - MKIPTVTV
+      - MKIPTV/Data.swift
+      - MKIPTV/AppStore.swift
+      - MKIPTV/E2e.swift
+      - MKIPTV/Sync.swift
+      - path: MKIPTV/GoogleService-Info.plist
+        optional: true
+        buildPhase: resources
+    dependencies:
+      - package: Firebase
+        product: FirebaseAuth
+      - package: Firebase
+        product: FirebaseFirestore
+      - package: Firebase
+        product: FirebaseAppCheck
+    scheme: {}
+    info:
+      path: MKIPTVTV/Info.plist
+      properties:
+        CFBundleDisplayName: MK IPTV
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen:
+          UIColorName: AccentColor
+        UIUserInterfaceStyle: Dark
+        ITSAppUsesNonExemptEncryption: false
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        UIRequiredDeviceCapabilities: [arm64]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mkuz.mkiptv
+        PRODUCT_NAME: MKIPTVTV
+        CODE_SIGN_ENTITLEMENTS: MKIPTVTV/MKIPTVTV.entitlements
+        TARGETED_DEVICE_FAMILY: "3"
+        ASSETCATALOG_COMPILER_APPICON_NAME: App Icon & Top Shelf Image
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         GENERATE_INFOPLIST_FILE: NO
         ENABLE_PREVIEWS: NO

@@ -11,7 +11,7 @@ st, v = api("GET", f"/v1/apps/{app['id']}/appStoreVersions?limit=20&fields[appSt
 for x in v.get("data", []):
     a = x["attributes"]
     print(f"Version {a['platform']:<8} {a['versionString']:<8} {a.get('appVersionState') or a.get('appStoreState')}  id={x['id']}")
-st, b = api("GET", f"/v1/builds?filter[app]={app['id']}&sort=-uploadedDate&limit=8&fields[builds]=version,uploadedDate,processingState&include=preReleaseVersion&fields[preReleaseVersions]=version,platform")
+st, b = api("GET", f"/v1/builds?filter[app]={app['id']}&sort=-uploadedDate&limit=8&fields[builds]=version,uploadedDate,processingState,preReleaseVersion&include=preReleaseVersion&fields[preReleaseVersions]=version,platform")
 pre = {p["id"]: p["attributes"] for p in b.get("included", [])}
 for x in b.get("data", []):
     pr = pre.get(x["relationships"]["preReleaseVersion"]["data"]["id"], {})

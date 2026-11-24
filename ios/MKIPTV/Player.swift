@@ -228,9 +228,9 @@ private struct PlayerOverlay: View {
                 Spacer()
                 // AirPlay to Apple TV / AirPlay smart TVs.
                 AirPlayButton().frame(width: 40, height: 40).glass(20).accessibilityLabel("AirPlay")
-                CastButton().frame(width: 40, height: 40).glass(20)
+                if !Platform.isMac { CastButton().frame(width: 40, height: 40).glass(20) }
                 // Full-screen landscape on/off (not on Mac, where the window is resized instead).
-                if !ProcessInfo.processInfo.isiOSAppOnMac {
+                if !Platform.isMac {
                     Button(action: toggleLandscape) {
                         Image(systemName: landscape ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right").font(.headline).frame(width: 40, height: 40)
                     }

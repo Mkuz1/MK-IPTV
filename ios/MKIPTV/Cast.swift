@@ -1,4 +1,5 @@
 import SwiftUI
+#if !targetEnvironment(macCatalyst)
 import GoogleCast
 
 /// Chromecast (Google Cast) support: the same Default Media Receiver the Android app uses.
@@ -100,6 +101,24 @@ struct CastButton: View {
         .accessibilityLabel(cast.deviceName.map { "Casting to \($0)" } ?? "Cast to Chromecast")
     }
 }
+
+#else
+/// The Google Cast SDK has no Mac build: casting is iPhone/iPad only (the Mac uses AirPlay).
+@MainActor
+final class CastManager: ObservableObject {
+    static let shared = CastManager()
+    @Published private(set) var deviceName: String?
+    var onSessionChange: ((Bool) -> Void)?
+    var isCasting: Bool { false }
+    static func setUp() {}
+    func showPicker() {}
+    @discardableResult func cast(_ it: PlayItem, url: URL, startAt: Double) -> Bool { false }
+    func position() -> Double? { nil }
+    func stopCasting() {}
+}
+
+struct CastButton: View { var body: some View { EmptyView() } }
+#endif
 
 /// The standard Cast icon: a screen with broadcast waves in the bottom-left corner.
 struct CastGlyph: View {

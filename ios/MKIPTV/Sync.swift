@@ -6,7 +6,9 @@ import CryptoKit
 import FirebaseCore
 import FirebaseAuth
 import FirebaseFirestore
+#if canImport(GoogleSignIn)
 import GoogleSignIn
+#endif
 import FirebaseAppCheck
 
 // Account sync, compatible with the Android / Google TV app (same Firestore layout and item format):
@@ -60,7 +62,13 @@ final class SyncService: ObservableObject {
     }
 
     static var configured: Bool { FirebaseApp.app() != nil }
-    var googleAvailable: Bool { FirebaseApp.app()?.options.clientID != nil }
+    var googleAvailable: Bool {
+        #if canImport(GoogleSignIn)
+        return FirebaseApp.app()?.options.clientID != nil
+        #else
+        return false
+        #endif
+    }
     var hasSpace: Bool { space != nil }
 
     /// Called once at launch.
@@ -122,7 +130,7 @@ final class SyncService: ObservableObject {
         let priv = deviceKey
         let ref = Firestore.firestore().collection("spaces").document(s)
         try await ref.collection("devices").document(deviceId).setData([
-            "pub": E2e.pubB64(priv), "uid": Auth.auth().currentUser?.uid ?? "", "platform": "ios",
+            "pub": E2e.pubB64(priv), "uid": Auth.auth().currentUser?.uid ?? "", "platform": Platform.syncName,
             "name": UIDevice.current.name, "seenAt": FieldValue.serverTimestamp(),
         ])
         if let k = cachedKey(s) { return k }
@@ -452,7 +460,9 @@ final class SyncService: ObservableObject {
             if let idx = store.playlists.firstIndex(where: { $0.id == from }) { store.playlists[idx].id = to }
             if store.activeId == from { store.activeId = to }
             for (k, p) in store.progress where p.playlistId == from { store.progress[k]?.playlistId = to }
+            #if os(iOS)
             DownloadManager.shared.remapPlaylist(from: from, to: to)
+            #endif
         }
     }
 
@@ -500,7 +510,7 @@ final class SyncService: ObservableObject {
     private func join(_ s: String, code: String? = nil) async throws {
         guard let uid = Auth.auth().currentUser?.uid else { throw SyncError("Not signed in") }
         let db = Firestore.firestore()
-        var m: [String: Any] = ["device": UIDevice.current.name, "platform": "ios", "joinedAt": FieldValue.serverTimestamp()]
+        var m: [String: Any] = ["device": UIDevice.current.name, "platform": Platform.syncName, "joinedAt": FieldValue.serverTimestamp()]
         if let code { m["code"] = code }
         try await db.collection("spaces").document(s).collection("members").document(uid).setData(m)
         try await db.collection("users").document(uid).setData(["spaceId": s], merge: true)
@@ -515,6 +525,7 @@ final class SyncService: ObservableObject {
         try await join(existing ?? uid)
     }
 
+#if canImport(GoogleSignIn)
     func signInWithGoogle() {
         guard let clientID = FirebaseApp.app()?.options.clientID,
               let root = UIApplication.shared.connectedScenes.compactMap({ ($0 as? UIWindowScene)?.keyWindow?.rootViewController }).first else {
@@ -543,6 +554,9 @@ final class SyncService: ObservableObject {
             }
         }
     }
+    #else
+    func signInWithGoogle() { state = .error("Use Sign in with Apple or a link code on this device.") }
+#endif
 
     func prepareApple(_ request: ASAuthorizationAppleIDRequest) {
         let nonce = Self.randomNonce()
@@ -625,7 +639,9 @@ final class SyncService: ObservableObject {
         defaults.removeObject(forKey: "sync.last")
         known = [:]; persist(); profiles = []
         try? Auth.auth().signOut()
+        #if canImport(GoogleSignIn)
         GIDSignIn.sharedInstance.signOut()
+        #endif
         state = .off
     }
 
@@ -701,7 +717,7 @@ struct SyncSettingsSection: View {
                         .font(.caption).foregroundStyle(Theme.sub)
                 }
                 if sync.profiles.count > 1 {
-                    Picker("Profile on this iPhone", selection: Binding(get: { sync.profileId ?? "" }, set: { sync.switchProfile(to: $0) })) {
+                    Picker("Profile on this \(Platform.deviceWord)", selection: Binding(get: { sync.profileId ?? "" }, set: { sync.switchProfile(to: $0) })) {
                         ForEach(sync.profiles) { Text($0.name).tag($0.id) }
                     }
                 }
@@ -709,7 +725,7 @@ struct SyncSettingsSection: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("On the other device open Settings › Sync across devices › Enter a code, and type:").font(.caption).foregroundStyle(Theme.sub)
                         Text(String(lc.code.prefix(4)) + "-" + String(lc.code.suffix(4))).font(.system(size: 34, weight: .black, design: .rounded)).kerning(4)
-                        Text("Valid for 15 minutes · works on Android, Google TV and iPhone").font(.caption2).foregroundStyle(Theme.sub)
+                        Text("Valid for 15 minutes · works on Android, Google TV, iPhone, Mac and Apple TV").font(.caption2).foregroundStyle(Theme.sub)
                     }
                     Button("Done") { sync.hideLinkCode() }
                 } else {
@@ -722,10 +738,10 @@ struct SyncSettingsSection: View {
                     .confirmationDialog("Delete synced data?", isPresented: $confirmDelete, titleVisibility: .visible) {
                         Button("Delete", role: .destructive) { sync.deleteSyncedData() }
                     } message: {
-                        Text("Removes your synced library and sync account from the cloud and stops sync on all devices. Everything on this iPhone stays.")
+                        Text("Removes your synced library and sync account from the cloud and stops sync on all devices. Everything on this \(Platform.deviceWord) stays.")
                     }
             case .off:
-                Text("Keep playlists, favorites, Continue Watching, watched episodes and preferences the same on your iPhone, Android phone, tablet and Google TV.")
+                Text("Keep playlists, favorites, Continue Watching, watched episodes and preferences the same on your iPhone, iPad, Mac, Apple TV, Android phone, tablet and Google TV.")
                     .font(.footnote).foregroundStyle(Theme.sub)
                 signInOptions
             }
@@ -737,7 +753,7 @@ struct SyncSettingsSection: View {
     @ViewBuilder private var signInOptions: some View {
         if entering {
             TextField("ABCD-EFGH", text: $code).textInputAutocapitalization(.characters).autocorrectionDisabled().font(.title3.monospaced())
-            Button("Link this iPhone") { sync.enterCode(code); entering = false; code = "" }
+            Button("Link this \(Platform.deviceWord)") { sync.enterCode(code); entering = false; code = "" }
                 .disabled(code.filter { $0.isLetter || $0.isNumber }.count != 8)
             Button("Cancel", role: .cancel) { entering = false }
         } else {
@@ -758,8 +774,34 @@ final class MKAppCheckFactory: NSObject, AppCheckProviderFactory {
     func createProvider(with app: FirebaseApp) -> AppCheckProvider? {
         #if targetEnvironment(simulator)
         return nil
+        #elseif os(tvOS)
+        if #available(tvOS 15.0, *) { return AppAttestProvider(app: app) } else { return nil }
         #else
         return AppAttestProvider(app: app)
+        #endif
+    }
+}
+
+
+/// Which Apple platform this build runs on (sync device records, wording).
+enum Platform {
+    static var isMac: Bool { ProcessInfo.processInfo.isiOSAppOnMac || ProcessInfo.processInfo.isMacCatalystApp }
+    static var syncName: String {
+        #if os(tvOS)
+        return "tvos"
+        #elseif targetEnvironment(macCatalyst)
+        return "macos"
+        #else
+        return ProcessInfo.processInfo.isiOSAppOnMac ? "macos" : "ios"
+        #endif
+    }
+    static var deviceWord: String {
+        #if os(tvOS)
+        return "Apple TV"
+        #elseif targetEnvironment(macCatalyst)
+        return "Mac"
+        #else
+        return UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone"
         #endif
     }
 }
