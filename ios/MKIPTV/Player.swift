@@ -81,6 +81,7 @@ final class PlayerModel: ObservableObject {
             player.seek(to: CMTime(seconds: resumeAt, preferredTimescale: 600),
                         toleranceBefore: CMTime(seconds: 3, preferredTimescale: 600), toleranceAfter: CMTime(seconds: 3, preferredTimescale: 600))
         }
+        try? AVAudioSession.sharedInstance().setActive(true)
         player.playImmediately(atRate: 1)
     }
 
@@ -132,9 +133,13 @@ final class PlayerModel: ObservableObject {
 /// AVPlayerViewController: AirPlay, picture-in-picture, subtitles/audio tracks, speed and Now Playing for free.
 struct SystemPlayer: UIViewControllerRepresentable {
     let player: AVPlayer
+    func makeCoordinator() -> BackgroundAudio { BackgroundAudio(player: player) }
+
     func makeUIViewController(context: Context) -> AVPlayerViewController {
         let vc = AVPlayerViewController()
         vc.player = player
+        vc.delegate = context.coordinator
+        context.coordinator.controller = vc
         vc.allowsPictureInPicturePlayback = true
         vc.canStartPictureInPictureAutomaticallyFromInline = true
         vc.updatesNowPlayingInfoCenter = true
@@ -144,7 +149,61 @@ struct SystemPlayer: UIViewControllerRepresentable {
         return vc
     }
     func updateUIViewController(_ vc: AVPlayerViewController, context: Context) {
-        if vc.player !== player { vc.player = player }
+        if vc.player !== player, !context.coordinator.detached { vc.player = player }
+    }
+}
+
+/// Keeps the sound playing when the app goes to the background (Home button, lock screen, another app):
+/// iOS pauses a player that is attached to on-screen video, so it is detached from the view while in the
+/// background and attached again when the app returns. Picture in Picture keeps the video instead.
+@MainActor
+final class BackgroundAudio: NSObject, AVPlayerViewControllerDelegate {
+    let player: AVPlayer
+    weak var controller: AVPlayerViewController?
+    private(set) var detached = false
+    private var pip = false
+    private var observers: [NSObjectProtocol] = []
+
+    init(player: AVPlayer) {
+        self.player = player
+        super.init()
+        let nc = NotificationCenter.default
+        observers.append(nc.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.enterBackground() }
+        })
+        observers.append(nc.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.enterForeground() }
+        })
+    }
+
+    deinit { observers.forEach { NotificationCenter.default.removeObserver($0) } }
+
+    private func enterBackground() {
+        guard !pip, let vc = controller, player.currentItem != nil else { return }
+        let wasPlaying = player.timeControlStatus != .paused || player.rate > 0
+        try? AVAudioSession.sharedInstance().setActive(true)
+        vc.player = nil
+        detached = true
+        if wasPlaying { player.play() }
+    }
+
+    private func enterForeground() {
+        guard detached else { return }
+        controller?.player = player
+        detached = false
+    }
+
+    nonisolated func playerViewControllerWillStartPictureInPicture(_ playerViewController: AVPlayerViewController) {
+        MainActor.assumeIsolated { self.pip = true }
+    }
+    nonisolated func playerViewControllerDidStartPictureInPicture(_ playerViewController: AVPlayerViewController) {
+        Task { @MainActor in self.pip = true }
+    }
+    nonisolated func playerViewController(_ playerViewController: AVPlayerViewController, failedToStartPictureInPictureWithError error: any Error) {
+        Task { @MainActor in self.pip = false }
+    }
+    nonisolated func playerViewControllerDidStopPictureInPicture(_ playerViewController: AVPlayerViewController) {
+        Task { @MainActor in self.pip = false }
     }
 }
 

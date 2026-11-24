@@ -95,7 +95,7 @@ jobs:
       - name: Archive (signed, automatic signing via API key)
         working-directory: ios
         run: |
-          BUILD=$((100 + ${{ github.run_number }}))   # always higher than any previous upload
+          BUILD=$((200 + ${{ github.run_number }}))   # always higher than any previous upload (iOS reached 113 from local builds)
           echo "BUILD=$BUILD" >> "$GITHUB_ENV"
           set +e
           xcodebuild -project MKIPTV.xcodeproj -scheme "$SCHEME" -configuration Release \

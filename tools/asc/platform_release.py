@@ -15,12 +15,14 @@ PLATFORM, STEP = sys.argv[1], sys.argv[2]
 SHOTS = sys.argv[3] if len(sys.argv) > 3 else None
 BUNDLE = os.environ.get("BUNDLE_ID", "com.mkuz.mkiptv")
 VERSION = os.environ.get("VERSION", "1.7.1")
-DISPLAY = {"MAC_OS": "APP_DESKTOP", "TV_OS": "APP_APPLE_TV"}[PLATFORM]
-NAME = {"MAC_OS": "Mac", "TV_OS": "Apple TV"}[PLATFORM]
+DISPLAY = {"MAC_OS": "APP_DESKTOP", "TV_OS": "APP_APPLE_TV", "IOS": "APP_IPHONE_67"}[PLATFORM]
+NAME = {"MAC_OS": "Mac", "TV_OS": "Apple TV", "IOS": "iPhone and iPad"}[PLATFORM]
 
 REVIEW_NOTE = f"""MK IPTV for {NAME} is a player for the user's own IPTV subscription (Xtream Codes API: server, username, password). It provides no content.
 
 To review without a subscription: the app adds the playlist "MK IPTV Demo" on first launch. It is an ordinary Xtream account on our public demo server https://mk-iptv-demo.mk-uz02.workers.dev (username demo, password demo), handled exactly like any provider - nothing is simulated or hidden inside the app. It contains Al Quran Al Kareem TV (the public live stream of the Saudi Broadcasting Authority) and public-domain NASA films and series. You can also add it manually in Settings > Add playlist.
+
+BACKGROUND AUDIO (UIBackgroundModes "audio", guideline 2.5.4): MK IPTV is a live TV and video player; people listen to live channels such as Al Quran Al Kareem TV with the screen off. To check it: open Live TV, play "Al Quran Al Kareem TV (Makkah Live)" full screen, then press Home or lock the device - the audio keeps playing and can be controlled from Control Center and the Lock Screen (Now Playing). The same background mode is also required for Picture in Picture (swipe home while a video plays full screen) and for AirPlay.
 
 All features are visible to every user: Live TV, Movies, Series, Favorites, Search, Settings, and optional sync across devices (Sign in with Apple or a one-time link code; Delete synced data is in Settings > Sync across devices)."""
 
@@ -184,7 +186,7 @@ def ensure_privacy_text(app):
 def submit(app, ver):
     ensure_privacy_text(app)
     st, b = api("GET", f"/v1/reviewSubmissions?filter[app]={app}&filter[platform]={PLATFORM}&limit=10")
-    sub = next((s for s in b.get("data", []) if s["attributes"]["state"] == "READY_FOR_REVIEW"), None)
+    sub = next((s for s in b.get("data", []) if s["attributes"]["state"] in ("READY_FOR_REVIEW", "UNRESOLVED_ISSUES")), None)
     if not sub:
         st, b = api("POST", "/v1/reviewSubmissions", {"data": {"type": "reviewSubmissions", "attributes": {"platform": PLATFORM},
             "relationships": {"app": {"data": {"type": "apps", "id": app}}}}})
@@ -192,8 +194,11 @@ def submit(app, ver):
     st, b = api("POST", "/v1/reviewSubmissionItems", {"data": {"type": "reviewSubmissionItems",
         "relationships": {"reviewSubmission": {"data": {"type": "reviewSubmissions", "id": sub["id"]}},
                           "appStoreVersion": {"data": {"type": "appStoreVersions", "id": ver["id"]}}}}})
-    if st >= 300 and "already" not in json.dumps(b):
-        ok(st, b, "add version to submission")
+    if st >= 300:
+        if sub["attributes"]["state"] == "UNRESOLVED_ISSUES":
+            print("Version is already part of the rejected submission; resubmitting it")
+        elif "already" not in json.dumps(b):
+            ok(st, b, "add version to submission")
     st, b = api("PATCH", f"/v1/reviewSubmissions/{sub['id']}", {"data": {"type": "reviewSubmissions", "id": sub["id"], "attributes": {"submitted": True}}})
     ok(st, b, "submit")
     print(f"SUBMITTED {NAME} {ver['attributes']['versionString']} for App Review")
@@ -203,7 +208,8 @@ app = app_id()
 ver = get_or_create_version(app)
 if STEP in ("prepare", "all"):
     ref = ios_reference(app)
-    copy_listing(ref, ver)
+    if PLATFORM != "IOS":
+        copy_listing(ref, ver)
     copy_review_detail(ref, ver)
     if SHOTS:
         upload_screenshots(ver, SHOTS)
