@@ -20,8 +20,13 @@ on:
       mode:
         description: "validate = check only, draft = upload as draft, release = roll out"
         type: choice
-        options: [validate, draft, release]
+        options: [validate, draft, release, promote]
         default: validate
+      promote_from:
+        description: "promote only: copy the newest release of this track to 'Play track' (no new build)"
+        type: choice
+        options: [internal, alpha, beta]
+        default: alpha
       notes:
         description: "What's new (en-US, max 500 characters)"
         default: "Bug fixes and improvements."
@@ -49,12 +54,23 @@ jobs:
           [ -n "$D" ] || missing="$missing PLAY_SERVICE_ACCOUNT_JSON"
           if [ -n "$missing" ]; then echo "::error::Missing repository secrets:$missing"; exit 1; fi
 
+      - name: Promote existing release (no build)
+        if: inputs.mode == 'promote'
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          NOTES: ${{ inputs.notes }}
+        run: |
+          pip install -q google-api-python-client google-auth
+          python3 tools/play_upload.py promote "${{ inputs.promote_from }}" "${{ inputs.track }}" "$NOTES"
+
       - uses: actions/setup-java@v4
+        if: inputs.mode != 'promote'
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Restore upload key and Firebase config
+        if: inputs.mode != 'promote'
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -72,10 +88,18 @@ jobs:
             echo "::warning::GOOGLE_SERVICES_JSON not set - account sync disabled in this build"
           fi
 
-      - name: Build App Bundle
-        run: ./gradlew -q :app:bundlePlayRelease
+      - name: Build App Bundle (next free version code)
+        if: inputs.mode != 'promote'
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          pip install -q google-api-python-client google-auth
+          CODE=$(python3 tools/play_upload.py next-code)
+          echo "Building with versionCode $CODE"
+          ./gradlew -q :app:bundlePlayRelease -PversionCodeOverride=$CODE
 
       - name: Upload to Google Play
+        if: inputs.mode != 'promote'
         env:
           PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           NOTES: ${{ inputs.notes }}
@@ -84,6 +108,7 @@ jobs:
           python3 tools/play_upload.py app/build/outputs/bundle/playRelease/app-play-release.aab "${{ inputs.track }}" "${{ inputs.mode }}" "$NOTES"
 
       - uses: actions/upload-artifact@v4
+        if: inputs.mode != 'promote'
         with:
           name: MK-IPTV-play-aab
           path: app/build/outputs/bundle/playRelease/app-play-release.aab
