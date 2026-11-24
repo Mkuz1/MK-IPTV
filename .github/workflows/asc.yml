@@ -1,0 +1,37 @@
+# Runs an App Store Connect API script from tools/asc/ (status, metadata, submissions) with the repository's API key.
+name: App Store Connect task
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "Script in tools/asc/ (without .py)"
+        default: status
+      args:
+        description: "Arguments"
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    env:
+      ASC_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+      BUNDLE_ID: ${{ vars.IOS_BUNDLE_ID || 'com.mkuz.mkiptv' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install API key
+        env:
+          API_KEY: ${{ secrets.APPSTORE_API_KEY }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/keys"
+          printf '%s\n' "$API_KEY" > "$RUNNER_TEMP/keys/key.p8"
+          echo "ASC_KEY_PATH=$RUNNER_TEMP/keys/key.p8" >> "$GITHUB_ENV"
+      - name: Run
+        run: python3 "tools/asc/${{ inputs.task }}.py" ${{ inputs.args }} | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Remove API key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/keys"

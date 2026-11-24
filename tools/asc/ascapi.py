@@ -1,9 +1,9 @@
 """Minimal App Store Connect API helper: api(method, path, body) -> (status, json). ES256 JWT signed with openssl."""
 import base64, json, os, subprocess, tempfile, time, urllib.request, urllib.error
 
-KEY_ID = "3THDD8249C"
-ISSUER = "2e8d4101-d7ef-4e83-8b99-c805c5d2788f"
-KEY_PATH = os.path.expanduser("~/keys/AuthKey_3THDD8249C.p8")
+KEY_ID = os.environ.get("ASC_KEY_ID", "3THDD8249C")
+ISSUER = os.environ.get("ASC_ISSUER_ID", "2e8d4101-d7ef-4e83-8b99-c805c5d2788f")
+KEY_PATH = os.environ.get("ASC_KEY_PATH", os.path.expanduser("~/keys/AuthKey_3THDD8249C.p8"))
 
 def _b64(b): return base64.urlsafe_b64encode(b).rstrip(b"=")
 
