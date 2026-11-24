@@ -44,6 +44,13 @@ jobs:
             tvos)  echo "SCHEME=MKIPTVTV" >> $GITHUB_ENV; echo "DEST=generic/platform=tvOS" >> $GITHUB_ENV ;;
             *)     echo "SCHEME=MKIPTV" >> $GITHUB_ENV; echo "DEST=generic/platform=iOS" >> $GITHUB_ENV ;;
           esac
+          # iPhone: automatic signing (the team has registered iPhones). Mac / Apple TV: no registered devices of that kind,
+          # so archive with an ad-hoc signature (keeps the entitlements) and let the export apply App Store signing.
+          if [ "${{ inputs.platform }}" = ios ]; then
+            echo "SIGNING=CODE_SIGN_STYLE=Automatic" >> $GITHUB_ENV
+          else
+            echo "SIGNING=CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO PROVISIONING_PROFILE_SPECIFIER=" >> $GITHUB_ENV
+          fi
 
       - name: Check secrets
         env:
@@ -91,7 +98,7 @@ jobs:
           xcodebuild -project MKIPTV.xcodeproj -scheme "$SCHEME" -configuration Release \
             -destination "$DEST" -archivePath build/MKIPTV.xcarchive archive \
             -allowProvisioningUpdates -authenticationKeyPath "$KEY_PATH" -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER_ID" \
-            DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_STYLE=Automatic PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" CURRENT_PROJECT_VERSION="$BUILD" > archive.log 2>&1
+            DEVELOPMENT_TEAM="$TEAM_ID" PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" CURRENT_PROJECT_VERSION="$BUILD" $SIGNING > archive.log 2>&1
           status=$?
           grep -E "error:|warning: .*(sign|provision)" archive.log | sort -u | head -60
           tail -5 archive.log
