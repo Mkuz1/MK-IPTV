@@ -7,7 +7,8 @@ MK IPTV provides no content of its own: it plays the user's own IPTV service.
 | Platform | Store | Source |
 |---|---|---|
 | Android phone, tablet, Google TV | Google Play (`com.mkuz.iptv`) | `app/` (Kotlin, Jetpack Compose, Media3) |
-| iPhone, iPad, Mac (Apple Silicon) | App Store (`com.mkuz.mkiptv`) | `ios/` (SwiftUI, AVKit) |
+| iPhone, iPad, Mac (Mac Catalyst) | App Store (`com.mkuz.mkiptv`) | `ios/MKIPTV` (SwiftUI, AVKit) |
+| Apple TV | App Store (`com.mkuz.mkiptv`, same record) | `ios/MKIPTVTV` (SwiftUI, AVKit) + shared code |
 | Public demo server | `https://mk-iptv-demo.mk-uz02.workers.dev` | `tools/demo-server/` (Cloudflare Worker) |
 
 Builds are also attached to [GitHub Releases](https://github.com/Mkuz1/MK-IPTV/releases) (`android-v*`: APK + AAB, `ios-v*`: IPA for sideloading).
@@ -64,6 +65,24 @@ A native SwiftUI app (`ios/`, iOS 17+). On Apple Silicon Macs it runs as the iPa
 - **AirPlay** (Apple TV, AirPlay 2 TVs) and **Chromecast** (official Google Cast SDK, Default Media Receiver): buttons on Live TV, Movies, Series and in the player. The Cast button is always visible; tapping it searches the Wi-Fi (local-network permission) and opens the device list. Casting hands over the current title and position, and playback returns to the phone when you disconnect.
 - **Sync** with Sign in with Apple, Google or a link code; the iPhone follows one synced profile (chosen in Settings).
 - Passwords live in the iOS Keychain (this device only); app data is excluded from backups.
+
+## Mac and Apple TV
+
+- **Mac**: the iPhone/iPad app built natively for macOS with Mac Catalyst (same bundle ID, one purchase on all Apple
+  devices). Everything from the iPad app, resizable windows, AirPlay; Chromecast stays on iPhone/iPad (Google's Cast SDK
+  has no Mac build). Sandboxed, with keychain and network entitlements.
+- **Apple TV** (`ios/MKIPTVTV`, tvOS 17+): a 10-foot interface on the shared catalog, player logic and sync code
+  (`Data.swift`, `AppStore.swift`, `Sync.swift`, `E2e.swift`).
+  - Tabs: Live TV, Movies, Series, Favorites, Search, Settings.
+  - Live TV: categories on the left, channels with now/next on the right; long-press a channel to favorite it.
+  - Movies and Series: Continue Watching, My List, Recently Added / Updated, Top Rated and every category as shelves;
+    detail pages with Resume / Play next, My List, seasons and episodes with watched marks (long-press to mark).
+  - Player: AVKit with the Apple TV transport bar, subtitles/audio menus, resume, next/previous episode or channel.
+  - Sync: Sign in with Apple or a link code from the phone (Google sign-in has no tvOS SDK).
+  - Layered app icon and top shelf images: `tools/apple-assets/make_assets.py`.
+- CI: *Apple platforms build check* compiles iPhone, Mac and Apple TV; *App Store upload* takes a platform input;
+  *Apple screenshots* captures store screenshots from the tvOS simulator and the Mac app; `tools/asc/platform_release.py`
+  creates, fills and submits the Mac / Apple TV App Store versions.
 
 ## Sync across devices
 

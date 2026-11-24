@@ -72,13 +72,7 @@ jobs:
         run: |
           brew install xcodegen
           xcodegen generate
-          # Google sign-in returns to the app through its reversed client id URL scheme.
-          G=MKIPTV/GoogleService-Info.plist
-          if [ -f "$G" ] && R=$(/usr/libexec/PlistBuddy -c "Print :REVERSED_CLIENT_ID" "$G" 2>/dev/null); then
-            /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes array" -c "Add :CFBundleURLTypes:0 dict" \
-              -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes array" -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string $R" MKIPTV/Info.plist
-            echo "Google sign-in URL scheme added"
-          fi
+          # The Google sign-in URL scheme comes from project.yml (GOOGLE_REVERSED_CLIENT_ID).
 
       - name: Install API key
         env:
