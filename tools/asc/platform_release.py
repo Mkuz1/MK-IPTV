@@ -157,7 +157,32 @@ def attach_build(app, ver, wait_minutes=60):
     print(f"Build {build['attributes']['version']} attached")
 
 
+PRIVACY_TEXT = """MK IPTV is a player for your own IPTV service (Xtream Codes). It provides no content.
+
+On your device the app stores the playlists you enter (the password in the Keychain), favorites, watch progress, settings and a cached copy of your provider's channel and movie lists.
+
+The app connects only to the IPTV provider you configured (your username and password are sent to it to load channels, guides, artwork and video), to the TVs you choose for AirPlay, and, only if you turn on sync, to Google Firebase.
+
+Sync is optional and off by default. When you turn it on (Sign in with Apple, Google, or a link code), a copy of your playlists, profiles, favorites, watch progress and settings is kept in Firebase so your own devices stay in sync. Playlist passwords are end-to-end encrypted on your device before upload. This data is not sold, shared, or used for advertising or analytics. Settings > Sync across devices > Delete synced data removes it.
+
+MK IPTV has no ads, no analytics and no tracking. Full policy: https://github.com/Mkuz1/MK-IPTV/blob/claude/upbeat-allen-sin4my/docs/PRIVACY.md
+Contact: mohamad@koussa.org"""
+
+
+def ensure_privacy_text(app):
+    """tvOS requires the privacy policy as text (App Information > Privacy Policy)."""
+    st, b = api("GET", f"/v1/apps/{app}/appInfos?limit=10")
+    for info in b.get("data", []):
+        st, l = api("GET", f"/v1/appInfos/{info['id']}/appInfoLocalizations?limit=50")
+        for loc in l.get("data", []):
+            if not loc["attributes"].get("privacyPolicyText"):
+                st, r = api("PATCH", f"/v1/appInfoLocalizations/{loc['id']}", {"data": {"type": "appInfoLocalizations", "id": loc["id"],
+                    "attributes": {"privacyPolicyText": PRIVACY_TEXT}}})
+                print(f"Privacy policy text ({loc['attributes']['locale']}, {info['attributes'].get('appStoreState') or info['attributes'].get('state')}): {'set' if st < 300 else 'not editable ' + str(st)}")
+
+
 def submit(app, ver):
+    ensure_privacy_text(app)
     st, b = api("GET", f"/v1/reviewSubmissions?filter[app]={app}&filter[platform]={PLATFORM}&limit=10")
     sub = next((s for s in b.get("data", []) if s["attributes"]["state"] == "READY_FOR_REVIEW"), None)
     if not sub:
