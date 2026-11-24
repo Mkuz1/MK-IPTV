@@ -47,7 +47,7 @@ jobs:
           for tab in movies series live favorites; do
             xcrun simctl terminate "$UDID" com.mkuz.mkiptv || true
             SIMCTL_CHILD_MK_TAB=$tab xcrun simctl launch "$UDID" com.mkuz.mkiptv
-            sleep 35
+            sleep 45
             xcrun simctl io "$UDID" screenshot "../store-assets/apple/tv/0$n-$tab.png"; n=$((n+1))
           done
           sips -g pixelWidth -g pixelHeight ../store-assets/apple/tv/*.png
@@ -66,7 +66,7 @@ jobs:
           for tab in movies series live favorites; do
             pkill -f MKIPTV.app || true; sleep 2
             open --env MK_TAB=$tab "$APP"
-            sleep 35
+            sleep 45
             WID=$(python3 -c "
           import Quartz
           ws = Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionOnScreenOnly, Quartz.kCGNullWindowID)

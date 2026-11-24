@@ -337,14 +337,26 @@ enum Keychain {
         delete(account)
         let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account,
                                 kSecValueData as String: Data(value.utf8), kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly]
-        SecItemAdd(q as CFDictionary, nil)
+        let status = SecItemAdd(q as CFDictionary, nil)
+        #if DEBUG
+        // Unsigned debug builds (CI screenshots) have no keychain access: keep the value in UserDefaults instead.
+        if status != errSecSuccess { UserDefaults.standard.set(value, forKey: "debug.keychain.\(account)") }
+        #else
+        _ = status
+        #endif
     }
 
     static func get(_ account: String) -> String? {
         let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account,
                                 kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
         var out: AnyObject?
-        guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess, let d = out as? Data else { return nil }
+        guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess, let d = out as? Data else {
+            #if DEBUG
+            return UserDefaults.standard.string(forKey: "debug.keychain.\(account)")
+            #else
+            return nil
+            #endif
+        }
         return String(data: d, encoding: .utf8)
     }
 

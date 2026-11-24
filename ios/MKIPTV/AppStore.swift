@@ -126,7 +126,13 @@ final class AppStore: ObservableObject {
     // MARK: Catalog (memory -> disk -> network)
 
     func load(force: Bool = false) async {
-        guard let p = active, let c = creds(p) else { catalog = nil; return }
+        guard let p = active else { catalog = nil; return }
+        guard let c = creds(p) else {
+            // No password on this device (e.g. a restored backup): say so instead of loading forever.
+            catalog = nil
+            loadError = "The password for \(p.name) isn't saved on this device. Remove the playlist in Settings and add it again."
+            return
+        }
         loadError = nil
         if !force, let m = memory[p.id] { catalog = m; return }
         if !force, let d = try? Data(contentsOf: catalogFile(p.id)), let disk = try? JSONDecoder().decode(Catalog.self, from: d) {
