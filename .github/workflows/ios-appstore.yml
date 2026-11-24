@@ -9,11 +9,16 @@
 #   GOOGLE_SERVICE_INFO_PLIST (optional) contents of GoogleService-Info.plist from Firebase (enables account sync)
 # Optional repository variable:
 #   IOS_BUNDLE_ID        bundle ID of the app record in App Store Connect (default com.mkuz.mkiptv)
-name: iOS App Store upload
+name: App Store upload (iPhone, Mac, Apple TV)
 
 on:
   workflow_dispatch:
     inputs:
+      platform:
+        description: "Which app to build and upload"
+        type: choice
+        options: [ios, macos, tvos]
+        default: ios
       whats_new:
         description: "What to Test / What's New"
         default: "Sync across devices: sign in with Apple or Google, or link devices with a code."
@@ -31,6 +36,14 @@ jobs:
       KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Platform
+        run: |
+          case "${{ inputs.platform }}" in
+            macos) echo "SCHEME=MKIPTV" >> $GITHUB_ENV; echo "DEST=generic/platform=macOS,variant=Mac Catalyst" >> $GITHUB_ENV ;;
+            tvos)  echo "SCHEME=MKIPTVTV" >> $GITHUB_ENV; echo "DEST=generic/platform=tvOS" >> $GITHUB_ENV ;;
+            *)     echo "SCHEME=MKIPTV" >> $GITHUB_ENV; echo "DEST=generic/platform=iOS" >> $GITHUB_ENV ;;
+          esac
 
       - name: Check secrets
         env:
@@ -81,8 +94,8 @@ jobs:
           BUILD=$((100 + ${{ github.run_number }}))   # always higher than any previous upload
           echo "BUILD=$BUILD" >> "$GITHUB_ENV"
           set +e
-          xcodebuild -project MKIPTV.xcodeproj -scheme MKIPTV -configuration Release \
-            -destination 'generic/platform=iOS' -archivePath build/MKIPTV.xcarchive archive \
+          xcodebuild -project MKIPTV.xcodeproj -scheme "$SCHEME" -configuration Release \
+            -destination "$DEST" -archivePath build/MKIPTV.xcarchive archive \
             -allowProvisioningUpdates -authenticationKeyPath "$KEY_PATH" -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER_ID" \
             DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_STYLE=Automatic PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" CURRENT_PROJECT_VERSION="$BUILD" > archive.log 2>&1
           status=$?
