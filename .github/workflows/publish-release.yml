@@ -5,6 +5,7 @@
 #   KEYSTORE_BASE64    base64 of keystore/mk-iptv-release.jks   (base64 -w0 mk-iptv-release.jks)
 #   KEYSTORE_PASSWORD  storePassword from keystore.properties
 #   KEY_PASSWORD       keyPassword from keystore.properties
+#   KEY_ALIAS          key alias (the Play upload key: mkiptv-upload)
 #   GOOGLE_SERVICES_JSON (optional) contents of app/google-services.json from Firebase (enables account sync)
 name: Publish release
 
@@ -54,13 +55,14 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'mkiptv' }}
         run: |
           mkdir -p keystore
           echo "$KEYSTORE_BASE64" | base64 -d > keystore/mk-iptv-release.jks
           {
             echo "storeFile=keystore/mk-iptv-release.jks"
             echo "storePassword=$KEYSTORE_PASSWORD"
-            echo "keyAlias=mkiptv"
+            echo "keyAlias=$KEY_ALIAS"
             echo "keyPassword=$KEY_PASSWORD"
           } > keystore.properties
 
@@ -87,8 +89,11 @@ jobs:
         run: |
           VERSION=$(python3 -c "import json;print(json.load(open('dist/version.json'))['versionName'])")
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          gh release create "v$VERSION" "dist/MK-IPTV-$VERSION.apk" dist/version.json \
-            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "MK IPTV $VERSION" --notes "$NOTES" --latest
+          keytool -printcert -jarfile "dist/MK-IPTV-$VERSION-android.apk" | grep -E "Owner|SHA256" | head -2
+          gh release create "android-v$VERSION" "dist/MK-IPTV-$VERSION-android.apk" "dist/MK-IPTV-$VERSION-android.aab" dist/version.json \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "MK IPTV for Android $VERSION" \
+            --notes "$NOTES (Phone, tablet, Google TV. Signed with the Play upload key; installed copies update in-app.)" --latest
+          curl -sSL "https://github.com/$GITHUB_REPOSITORY/releases/latest/download/version.json"
 
       - name: Remove signing material
         if: always()
