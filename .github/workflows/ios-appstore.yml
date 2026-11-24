@@ -112,6 +112,7 @@ jobs:
         working-directory: ios
         run: |
           APP=$(ls -d build/MKIPTV.xcarchive/Products/Applications/*.app)
+          for f in "$APP"/Frameworks/*.framework "$APP"/Frameworks/*.dylib; do [ -e "$f" ] && codesign -f -s - "$f"; done
           codesign -f -s - --entitlements MKIPTVTV/MKIPTVTV.entitlements --generate-entitlement-der "$APP"
           codesign -d --entitlements - "$APP" | head -20
 
