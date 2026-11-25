@@ -68,6 +68,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -117,7 +119,9 @@ fun PlayerScreen(a: PlayerActivity) {
     val focusScope = rememberCoroutineScope()
     // TV: a seek re-renders the controls (buffering, new position), which can move D-pad focus to another
     // button. Keep it on the button that was pressed so repeated presses keep skipping.
+    var lastFocus by remember { mutableStateOf(playFocus) }
     val keepFocus: (androidx.compose.ui.focus.FocusRequester) -> Unit = { r ->
+        lastFocus = r
         if (tv) focusScope.launch { for (d in listOf(0L, 120L, 400L, 900L)) { delay(d); runCatching { r.requestFocus() } } }
     }
     var locked by remember { mutableStateOf(false) }
@@ -151,6 +155,9 @@ fun PlayerScreen(a: PlayerActivity) {
                         layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                         setShutterBackgroundColor(android.graphics.Color.BLACK)
                         setKeepContentOnPlayerReset(true)
+                        // Never take D-pad focus from the controls (TV remotes).
+                        isFocusable = false; isFocusableInTouchMode = false
+                        descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
                     }
                 },
                 update = { v -> v.player = a.exo; v.resizeMode = resize },
@@ -188,9 +195,10 @@ fun PlayerScreen(a: PlayerActivity) {
         }
 
         // Tap layer
+        // (pointer-only: a focusable full-screen layer could take the remote's focus from the buttons)
         Box(
-            Modifier.fillMaxSize().clickable(remember { MutableInteractionSource() }, null) {
-                if (sheet != Sheet.NONE) sheet = Sheet.NONE else { visible = !visible; bump() }
+            Modifier.fillMaxSize().pointerInput(Unit) {
+                detectTapGestures { if (sheet != Sheet.NONE) sheet = Sheet.NONE else { visible = !visible; bump() } }
             }
         )
 
@@ -219,7 +227,13 @@ fun PlayerScreen(a: PlayerActivity) {
         }
 
         AnimatedVisibility(visible, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.fillMaxSize()) {
-            Box(Modifier.fillMaxSize()) {
+            // TV: if focus ever leaves the controls while they are showing (a seek re-renders the player),
+            // put it back on the button that was used last instead of losing it.
+            Box(Modifier.fillMaxSize().onFocusChanged { st ->
+                if (tv && !st.hasFocus && visible && !locked && sheet == Sheet.NONE) {
+                    focusScope.launch { delay(30); if (visible && sheet == Sheet.NONE) runCatching { lastFocus.requestFocus() } }
+                }
+            }) {
                 Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = .55f), .3f to Color.Transparent, .65f to Color.Transparent, 1f to Color.Black.copy(alpha = .65f))))
                 Column(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 24.dp, vertical = 14.dp)) {
                     // ---- top bar ----
@@ -261,10 +275,10 @@ fun PlayerScreen(a: PlayerActivity) {
                         } else {
                             GlassIconButton(Icons.Rounded.Replay10, {
                                 if (airplay != null) a.airPlaySeekBy(-10_000) else player?.seekBack(); bump(); keepFocus(backFocus)
-                            }, modifier = Modifier.focusRequester(backFocus), size = sideBtn, iconSize = 30.dp, blur = false, contentDescription = "Back 10 seconds")
+                            }, modifier = Modifier.focusRequester(backFocus).onFocusChanged { if (it.isFocused) lastFocus = backFocus }, size = sideBtn, iconSize = 30.dp, blur = false, contentDescription = "Back 10 seconds")
                         }
                         Spacer(Modifier.width(48.dp))
-                        GlassIconButton(modifier = Modifier.focusRequester(playFocus), icon = if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, onClick = {
+                        GlassIconButton(modifier = Modifier.focusRequester(playFocus).onFocusChanged { if (it.isFocused) lastFocus = playFocus }, icon = if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, onClick = {
                             if (airplay != null) a.airPlayToggle() else player?.let { if (it.isPlaying) it.pause() else it.play() }; bump()
                         }, size = mainBtn, iconSize = 42.dp, blur = false, contentDescription = if (playing) "Pause" else "Play")
                         Spacer(Modifier.width(48.dp))
@@ -273,7 +287,7 @@ fun PlayerScreen(a: PlayerActivity) {
                         } else {
                             GlassIconButton(Icons.Rounded.Forward10, {
                                 if (airplay != null) a.airPlaySeekBy(10_000) else player?.seekForward(); bump(); keepFocus(fwdFocus)
-                            }, modifier = Modifier.focusRequester(fwdFocus), size = sideBtn, iconSize = 30.dp, blur = false, contentDescription = "Forward 10 seconds")
+                            }, modifier = Modifier.focusRequester(fwdFocus).onFocusChanged { if (it.isFocused) lastFocus = fwdFocus }, size = sideBtn, iconSize = 30.dp, blur = false, contentDescription = "Forward 10 seconds")
                         }
                     }
                     Spacer(Modifier.weight(1f))
