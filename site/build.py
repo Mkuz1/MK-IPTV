@@ -23,11 +23,10 @@ SITE = os.environ.get("SITE_URL", "https://mkiptv.pages.dev")
 HEAD = '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
 dist = os.path.join(here, "dist")
 os.makedirs(dist, exist_ok=True)
-page = out.replace('content="assets/og.jpg"', f'content="{SITE}/assets/og.jpg"')
-page = page.replace('<meta property="og:type" content="website">', f'<meta property="og:type" content="website">\n<meta property="og:url" content="{SITE}/">\n<link rel="canonical" href="{SITE}/">')
+page = out  # share tags in src/index.html are already absolute (https://mkiptv.pages.dev)
 style = page[page.index("<style>"):page.index("</style>") + 8]
 open(os.path.join(dist, "index.html"), "w").write(HEAD + page.replace("<a class=\"skip", "</head>\n<body>\n<a class=\"skip", 1) + "\n</body>\n</html>\n")
-nf = (HEAD + '<title>Page not found · MK IPTV</title>\n<meta name="robots" content="noindex">\n<link rel="icon" href="/assets/favicon.png">\n'
+nf = (HEAD + '<title>Page not found · MK IPTV</title>\n<meta name="robots" content="noindex">\n<link rel="icon" href="/favicon.ico" sizes="48x48">\n<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">\n'
       '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap">\n' + style +
       '\n<style>.nf{min-height:100vh;display:grid;place-items:center;text-align:center;padding-block:96px}.nf h1{background:linear-gradient(90deg,#FFFFFF,#9B9B9B);-webkit-background-clip:text;background-clip:text;color:transparent}</style>\n</head>\n<body>\n'
       '<main class="nf wrap"><div style="display:grid;gap:24px;justify-items:center">'
@@ -38,7 +37,9 @@ nf = (HEAD + '<title>Page not found · MK IPTV</title>\n<meta name="robots" cont
 open(os.path.join(dist, "404.html"), "w").write(nf)
 import shutil
 shutil.copytree(os.path.join(here, "assets"), os.path.join(dist, "assets"), dirs_exist_ok=True)
+for f in ("favicon.ico", "site.webmanifest"):  # served from the site root
+    shutil.copy(os.path.join(here, "assets", f), os.path.join(dist, f))
 open(os.path.join(dist, "_headers"), "w").write("/assets/*\n  Cache-Control: public, max-age=604800\n/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n")
 open(os.path.join(dist, "robots.txt"), "w").write(f"User-agent: *\nAllow: /\nSitemap: {SITE}/sitemap.xml\n")
-open(os.path.join(dist, "sitemap.xml"), "w").write(f'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>{SITE}/</loc></url></urlset>\n')
+open(os.path.join(dist, "sitemap.xml"), "w").write(f'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>{SITE}/</loc><lastmod>2026-11-26</lastmod></url></urlset>\n')
 print("site/dist ready:", sorted(os.listdir(dist)))
