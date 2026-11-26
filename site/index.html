@@ -1,0 +1,489 @@
+<title>MK IPTV</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="MK IPTV plays your Xtream Codes IPTV subscription as Live TV, Movies and Series on iPhone, iPad, Mac, Apple TV, Android and Google TV, with Continue Watching, downloads and sync.">
+<meta property="og:title" content="MK IPTV">
+<meta property="og:description" content="Watch your IPTV subscription like a streaming service, on every screen you own.">
+<meta property="og:image" content="assets/og.jpg">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap">
+<style>
+/* Layout: one dark stage, a floating glass nav, a hero that shows the real app, then the argument in calm full width bands. */
+:root {
+  color-scheme: dark;
+  --bg: #000000;        /* page */
+  --surface: #181818;   /* cards */
+  --surface-2: #1F1F1F; /* raised */
+  --line: #313131;      /* borders */
+  --fg: #FFFFFF;
+  --muted: #9B9B9B;
+  --accent: #7DC4FF;    /* the app's own focus blue */
+  --font: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font); margin: 0; -webkit-font-smoothing: antialiased; }
+img { max-width: 100%; height: auto; display: block; }
+a { color: inherit; }
+svg { width: 1em; height: 1em; flex: none; }
+
+/* Text styles (B1) */
+.heading-1 { font-size: 60px; line-height: 60px; font-weight: 600; letter-spacing: -0.02em; }
+.heading-2 { font-size: 48px; line-height: 48px; font-weight: 600; letter-spacing: -0.02em; }
+.heading-3 { font-size: 36px; line-height: 40px; font-weight: 600; letter-spacing: -0.01em; }
+.heading-4 { font-size: 30px; line-height: 36px; font-weight: 600; letter-spacing: -0.01em; }
+.heading-5 { font-size: 24px; line-height: 32px; font-weight: 600; }
+.title-2 { font-size: 18px; line-height: 28px; font-weight: 500; }
+.title-3 { font-size: 16px; line-height: 24px; font-weight: 500; }
+.title-4 { font-size: 14px; line-height: 20px; font-weight: 500; }
+.body-3 { font-size: 16px; line-height: 24px; font-weight: 400; }
+.body-6 { font-size: 14px; line-height: 20px; font-weight: 400; }
+.button-md { font-size: 16px; line-height: 24px; font-weight: 600; }
+.button-sm { font-size: 14px; line-height: 20px; font-weight: 600; }
+.caption-3 { font-size: 12px; line-height: 16px; font-weight: 600; }
+.caption-4 { font-size: 12px; line-height: 16px; font-weight: 500; }
+.caption-5 { font-size: 12px; line-height: 16px; font-weight: 400; }
+h1, h2, h3, p { margin: 0; }
+h1, h2, h3 { text-wrap: balance; }
+p, li { text-wrap: pretty; }
+.muted { color: var(--muted); }
+.eyebrow { color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase; }
+
+.wrap { max-width: 1152px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+section { padding-block: 96px; }
+
+/* Buttons and focus (B9) */
+.btn { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 12px; text-decoration: none; border: 1px solid transparent;
+  transition: transform 300ms var(--ease), background-color 300ms var(--ease), opacity 300ms var(--ease); cursor: pointer; }
+.btn-primary { background: var(--fg); color: var(--bg); }
+.btn-primary:hover { background: var(--accent); transform: translateY(-2px); }
+.btn-ghost { border-color: var(--line); background: var(--surface); color: var(--fg); }
+.btn-ghost:hover { background: var(--surface-2); transform: translateY(-2px); }
+.btn:active { transform: scale(0.98); }
+.btn[aria-disabled="true"] { opacity: .5; cursor: default; pointer-events: none; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 12px; }
+.skip { position: absolute; left: 16px; top: -48px; background: var(--fg); color: var(--bg); padding: 8px 12px; border-radius: 8px; z-index: 50; }
+.skip:focus { top: calc(16px + env(safe-area-inset-top, 0px)); }
+
+/* Floating navigation (B7) */
+.nav { position: fixed; z-index: 30; top: calc(16px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 24px; padding: 8px 8px 8px 16px; border-radius: 16px; border: 1px solid var(--line);
+  background: rgba(24, 24, 24, .72); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); max-width: calc(100% - 32px); }
+.brand { display: flex; align-items: center; gap: 8px; text-decoration: none; }
+.brand img { width: 24px; height: 24px; border-radius: 8px; }
+.nav-links { display: flex; gap: 4px; list-style: none; margin: 0; padding: 0; }
+.nav-links a { display: block; padding: 4px 12px; border-radius: 8px; text-decoration: none; color: var(--muted); transition: color 300ms var(--ease), background-color 300ms var(--ease); }
+.nav-links a:hover, .nav-links a[aria-current="true"] { color: var(--fg); background: var(--surface-2); }
+.menu-btn { display: none; width: 40px; height: 40px; border: 0; border-radius: 12px; background: var(--surface-2); color: var(--fg); position: relative; cursor: pointer; }
+.menu-btn span { position: absolute; left: 12px; right: 12px; height: 2px; background: currentColor; border-radius: 2px; transition: transform 500ms var(--ease); }
+.menu-btn span:first-child { transform: translateY(-4px); }
+.menu-btn span:last-child { transform: translateY(4px); }
+.menu-open .menu-btn span:first-child { transform: rotate(45deg); }
+.menu-open .menu-btn span:last-child { transform: rotate(-45deg); }
+.panel { position: fixed; inset: 0; z-index: 20; background: rgba(0, 0, 0, .92); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+  padding: calc(96px + env(safe-area-inset-top, 0px)) max(24px, env(safe-area-inset-right, 0px)) 48px max(24px, env(safe-area-inset-left, 0px));
+  display: flex; flex-direction: column; gap: 16px; opacity: 0; pointer-events: none; transition: opacity 500ms var(--ease); }
+.panel a { text-decoration: none; opacity: 0; transform: translateY(24px); transition: opacity 500ms var(--ease), transform 500ms var(--ease); }
+.menu-open .panel { opacity: 1; pointer-events: auto; }
+.menu-open .panel a { opacity: 1; transform: none; }
+
+/* Hero (B5) */
+.hero { padding-top: calc(160px + env(safe-area-inset-top, 0px)); padding-bottom: 64px; text-align: center; }
+.hero h1 { max-width: 680px; margin: 0 auto; background: linear-gradient(90deg, #FFFFFF, #9B9B9B); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hero .sub { max-width: 680px; margin: 24px auto 0; }
+.hero .cta { margin-top: 32px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.stage { position: relative; margin-top: 64px; }
+.frame { border-radius: 24px; border: 1px solid var(--line); background: var(--surface); padding: 8px; }
+.frame img { border-radius: 16px; }
+.stage .phone { position: absolute; right: 4%; bottom: -48px; width: 20%; border-radius: 24px; border: 1px solid var(--line); background: var(--surface); padding: 8px; }
+.stage .phone img { border-radius: 16px; aspect-ratio: 9 / 16; width: 100%; object-fit: cover; object-position: top; }
+
+/* Platform strip (proof) */
+.platforms { padding-block: 48px; border-block: 1px solid var(--line); }
+.platforms ul { list-style: none; margin: 24px 0 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 12px 40px; }
+.platforms li { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.platforms li svg { font-size: 20px; color: var(--fg); }
+
+/* Problem to solution */
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 48px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 32px; min-width: 0; }
+.card h3 { margin-bottom: 16px; }
+.ticks { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.ticks li { display: flex; gap: 12px; align-items: flex-start; }
+.ticks svg { font-size: 20px; margin-top: 2px; }
+.ticks.no svg { color: var(--muted); }
+.ticks.yes svg { color: var(--accent); }
+
+/* Tagline reveal (B11) */
+.tagline { padding-block: 96px; }
+.tagline p { max-width: 680px; margin: 0 auto; text-align: center; }
+.tagline .w { opacity: .3; transition: opacity 600ms var(--ease); }
+.tagline .w.on { opacity: 1; }
+
+/* Benefits */
+.benefits { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin-top: 48px; }
+.benefit { display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+.benefit .icon { width: 40px; height: 40px; border-radius: 12px; background: var(--surface-2); display: grid; place-items: center; font-size: 20px; color: var(--accent); }
+.benefit .shot { margin-top: 12px; border-radius: 16px; border: 1px solid var(--line); overflow: hidden; background: var(--bg); }
+.benefit .shot.tall { height: 280px; }
+.benefit .shot.tall img { width: 100%; height: 100%; object-fit: cover; object-position: 0 30%; }
+.extras { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; list-style: none; padding: 0; }
+.extras li { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 9999px; color: var(--muted); }
+.extras svg { color: var(--fg); }
+
+/* Screens */
+.screens { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin-top: 48px; align-items: start; }
+.screens figure { margin: 0; display: grid; gap: 12px; min-width: 0; }
+.screens .stack { display: grid; gap: 24px; }
+
+/* Steps */
+.steps { list-style: none; margin: 48px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; counter-reset: step; }
+.steps li { counter-increment: step; display: flex; flex-direction: column; gap: 12px; }
+.steps li::before { content: counter(step); width: 32px; height: 32px; border-radius: 9999px; border: 1px solid var(--line); display: grid; place-items: center;
+  font-size: 14px; line-height: 20px; font-weight: 600; color: var(--accent); }
+
+/* Privacy proof */
+.facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; margin-top: 48px; }
+.fact svg { font-size: 24px; color: var(--accent); }
+.fact { display: flex; flex-direction: column; gap: 12px; }
+
+/* FAQ */
+.faq { max-width: 768px; margin: 48px auto 0; display: grid; gap: 12px; }
+.faq details { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 16px 24px; }
+.faq summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary svg { font-size: 20px; color: var(--muted); transition: transform 500ms var(--ease); }
+.faq details[open] summary svg { transform: rotate(45deg); }
+.faq .answer { margin: 12px 0 0; }
+
+/* Get the app */
+.get { text-align: center; }
+.get .opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; margin-top: 48px; text-align: left; }
+.opt { display: flex; flex-direction: column; gap: 12px; }
+.opt .plat { display: flex; align-items: center; gap: 8px; }
+.opt .plat svg { font-size: 24px; }
+.opt .btn { align-self: flex-start; margin-top: auto; }
+.status { display: inline-flex; align-items: center; gap: 8px; }
+.status::before { content: ""; width: 8px; height: 8px; border-radius: 9999px; background: var(--muted); }
+.status.live::before { background: #33C77A; }
+
+footer { border-top: 1px solid var(--line); padding-block: 48px; }
+footer .row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 24px; align-items: center; }
+footer nav ul { list-style: none; display: flex; flex-wrap: wrap; gap: 24px; margin: 0; padding: 0; }
+footer a { color: var(--muted); text-decoration: none; transition: color 300ms var(--ease); }
+footer a:hover { color: var(--fg); }
+.mail { user-select: all; }
+
+/* Scroll reveals (B7): content is visible at rest; only sections below the first screen get the rise in. */
+.pre { opacity: 0; transform: translateY(32px); }
+.reveal { transition: opacity 700ms var(--ease), transform 700ms var(--ease); }
+
+@media (max-width: 860px) {
+  .nav-links, .nav .btn { display: none; }
+  .menu-btn { display: block; }
+  .nav { gap: 16px; padding: 8px 8px 8px 16px; }
+  .split, .benefits, .screens, .steps, .facts, .get .opts { grid-template-columns: 1fr; }
+  .stage .phone { display: none; }
+}
+@media (max-width: 640px) {
+  section { padding-block: 64px; }
+  .hero { padding-top: calc(128px + env(safe-area-inset-top, 0px)); }
+  .hero h1 { font-size: 36px; line-height: 40px; }          /* Heading 3 on phones */
+  br.wide { display: none; }
+  .heading-2 { font-size: 30px; line-height: 36px; }         /* Heading 4 on phones */
+  .heading-4 { font-size: 24px; line-height: 32px; }         /* Heading 5 on phones */
+  .card { padding: 24px; }
+  .stage { margin-top: 48px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .pre { transform: none; }
+  .reveal, .btn, .panel, .panel a, .menu-btn span, .faq summary svg, .tagline .w { transition: opacity 300ms linear; }
+  .tagline .w { opacity: 1; }
+}
+</style>
+
+<a class="skip button-sm" href="#main">Skip to content</a>
+
+<nav class="nav" aria-label="Main">
+  <a class="brand title-3" href="#top" aria-label="MK IPTV home"><img src="assets/icon-192.png" alt="">MK IPTV</a>
+  <ul class="nav-links title-4">
+    <li><a href="#features">Features</a></li>
+    <li><a href="#screens">Screens</a></li>
+    <li><a href="#how">How it works</a></li>
+    <li><a href="#faq">FAQ</a></li>
+  </ul>
+  <a class="btn btn-primary button-sm" href="#get">Get the app</a>
+  <button class="menu-btn" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="panel"><span></span><span></span></button>
+</nav>
+<div class="panel heading-4" id="panel" aria-label="Menu">
+  <a href="#features">Features</a>
+  <a href="#screens">Screens</a>
+  <a href="#how">How it works</a>
+  <a href="#faq">FAQ</a>
+  <a href="#get">Get the app</a>
+</div>
+
+<main id="main">
+  <header class="hero" id="top">
+    <div class="wrap">
+      <p class="eyebrow caption-3">For your Xtream Codes subscription</p>
+      <h1 class="heading-1" style="margin-top:16px">Watch your IPTV <br class="wide">like a streaming service</h1>
+      <p class="sub body-3 muted">MK IPTV turns your playlist into Live TV, Movies and Series you can browse, resume and download, on iPhone, iPad, Mac, Apple TV, Android and Google TV.</p>
+      <div class="cta">
+        <a class="btn btn-primary button-md" href="#get">Get MK IPTV <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M221.66,133.66l-72,72a8,8,0,0,1-11.32-11.32L196.69,136H40a8,8,0,0,1,0-16H196.69L138.34,61.66a8,8,0,0,1,11.32-11.32l72,72A8,8,0,0,1,221.66,133.66Z"/></svg></a>
+        <p class="caption-4 muted">A demo playlist is built in, so you can try everything before adding your own.</p>
+      </div>
+      <div class="stage">
+        <div class="frame"><img src="assets/mac-movies.webp" width="1440" height="900" alt="MK IPTV on a Mac showing the Movies tab with a featured film, a Play button and a Recently Added row"></div>
+        <div class="phone"><img src="assets/phone-continue.webp" width="600" height="1333" alt="MK IPTV on an Android phone showing Continue Watching with the next episode marked Up next"></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="platforms">
+    <div class="wrap" style="text-align:center">
+      <p class="caption-3 muted" style="letter-spacing:.08em;text-transform:uppercase">One app on every screen you own</p>
+      <ul class="title-3">
+        <li><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M223.3,169.59a8.07,8.07,0,0,0-2.8-3.4C203.53,154.53,200,134.64,200,120c0-17.67,13.47-33.06,21.5-40.67a8,8,0,0,0,0-11.62C208.82,55.74,187.82,48,168,48a72.2,72.2,0,0,0-40,12.13,71.56,71.56,0,0,0-90.71,9.09A74.63,74.63,0,0,0,16,123.4a127.06,127.06,0,0,0,40.14,89.73A39.8,39.8,0,0,0,83.59,224h87.68a39.84,39.84,0,0,0,29.12-12.57,125,125,0,0,0,17.82-24.6C225.23,174,224.33,172,223.3,169.59Zm-34.63,30.94a23.76,23.76,0,0,1-17.4,7.47H83.59a23.82,23.82,0,0,1-16.44-6.51A111.14,111.14,0,0,1,32,123,58.5,58.5,0,0,1,48.65,80.47,54.81,54.81,0,0,1,88,64h.78A55.45,55.45,0,0,1,123,76.28a8,8,0,0,0,10,0A55.44,55.44,0,0,1,168,64a70.64,70.64,0,0,1,36,10.35c-13,14.52-20,30.47-20,45.65,0,23.77,7.64,42.73,22.18,55.3A105.82,105.82,0,0,1,188.67,200.53ZM128.23,30A40,40,0,0,1,167,0h1a8,8,0,0,1,0,16h-1a24,24,0,0,0-23.24,18,8,8,0,1,1-15.5-4Z"/></svg> iPhone</li>
+        <li><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M223.3,169.59a8.07,8.07,0,0,0-2.8-3.4C203.53,154.53,200,134.64,200,120c0-17.67,13.47-33.06,21.5-40.67a8,8,0,0,0,0-11.62C208.82,55.74,187.82,48,168,48a72.2,72.2,0,0,0-40,12.13,71.56,71.56,0,0,0-90.71,9.09A74.63,74.63,0,0,0,16,123.4a127.06,127.06,0,0,0,40.14,89.73A39.8,39.8,0,0,0,83.59,224h87.68a39.84,39.84,0,0,0,29.12-12.57,125,125,0,0,0,17.82-24.6C225.23,174,224.33,172,223.3,169.59Zm-34.63,30.94a23.76,23.76,0,0,1-17.4,7.47H83.59a23.82,23.82,0,0,1-16.44-6.51A111.14,111.14,0,0,1,32,123,58.5,58.5,0,0,1,48.65,80.47,54.81,54.81,0,0,1,88,64h.78A55.45,55.45,0,0,1,123,76.28a8,8,0,0,0,10,0A55.44,55.44,0,0,1,168,64a70.64,70.64,0,0,1,36,10.35c-13,14.52-20,30.47-20,45.65,0,23.77,7.64,42.73,22.18,55.3A105.82,105.82,0,0,1,188.67,200.53ZM128.23,30A40,40,0,0,1,167,0h1a8,8,0,0,1,0,16h-1a24,24,0,0,0-23.24,18,8,8,0,1,1-15.5-4Z"/></svg> iPad</li>
+        <li><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M223.3,169.59a8.07,8.07,0,0,0-2.8-3.4C203.53,154.53,200,134.64,200,120c0-17.67,13.47-33.06,21.5-40.67a8,8,0,0,0,0-11.62C208.82,55.74,187.82,48,168,48a72.2,72.2,0,0,0-40,12.13,71.56,71.56,0,0,0-90.71,9.09A74.63,74.63,0,0,0,16,123.4a127.06,127.06,0,0,0,40.14,89.73A39.8,39.8,0,0,0,83.59,224h87.68a39.84,39.84,0,0,0,29.12-12.57,125,125,0,0,0,17.82-24.6C225.23,174,224.33,172,223.3,169.59Zm-34.63,30.94a23.76,23.76,0,0,1-17.4,7.47H83.59a23.82,23.82,0,0,1-16.44-6.51A111.14,111.14,0,0,1,32,123,58.5,58.5,0,0,1,48.65,80.47,54.81,54.81,0,0,1,88,64h.78A55.45,55.45,0,0,1,123,76.28a8,8,0,0,0,10,0A55.44,55.44,0,0,1,168,64a70.64,70.64,0,0,1,36,10.35c-13,14.52-20,30.47-20,45.65,0,23.77,7.64,42.73,22.18,55.3A105.82,105.82,0,0,1,188.67,200.53ZM128.23,30A40,40,0,0,1,167,0h1a8,8,0,0,1,0,16h-1a24,24,0,0,0-23.24,18,8,8,0,1,1-15.5-4Z"/></svg> Mac</li>
+        <li><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M216,64H147.31l34.35-34.34a8,8,0,1,0-11.32-11.32L128,60.69,85.66,18.34A8,8,0,0,0,74.34,29.66L108.69,64H40A16,16,0,0,0,24,80V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V80A16,16,0,0,0,216,64Zm0,136H40V80H216V200Z"/></svg> Apple TV</li>
+        <li><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M176,148a12,12,0,1,1-12-12A12,12,0,0,1,176,148ZM92,136a12,12,0,1,0,12,12A12,12,0,0,0,92,136Zm148,24v24a16,16,0,0,1-16,16H32a16,16,0,0,1-16-16V161.13A113.38,113.38,0,0,1,51.4,78.72L26.34,53.66A8,8,0,0,1,37.66,42.34L63.82,68.5a111.43,111.43,0,0,1,128.55-.19l26-26a8,8,0,0,1,11.32,11.32L204.82,78.5c.75.71,1.5,1.43,2.24,2.17A111.25,111.25,0,0,1,240,160Zm-16,0a96,96,0,0,0-96-96h-.34C74.91,64.18,32,107.75,32,161.13V184H224Z"/></svg> Android</li>
+        <li><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M216,64H147.31l34.35-34.34a8,8,0,1,0-11.32-11.32L128,60.69,85.66,18.34A8,8,0,0,0,74.34,29.66L108.69,64H40A16,16,0,0,0,24,80V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V80A16,16,0,0,0,216,64Zm0,136H40V80H216V200Z"/></svg> Google TV</li>
+      </ul>
+    </div>
+  </div>
+
+  <section id="why">
+    <div class="wrap">
+      <p class="eyebrow caption-3">Why MK IPTV</p>
+      <h2 class="heading-4" style="margin-top:12px;max-width:680px">Your provider sends thousands of channels. Most players just hand you the list.</h2>
+      <div class="split">
+        <div class="card">
+          <h3 class="title-2 muted">A typical IPTV player</h3>
+          <ul class="ticks no body-3 muted">
+            <li><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"/></svg> One endless scroll of channels and categories</li>
+            <li><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"/></svg> Films start from the beginning every time you come back</li>
+            <li><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"/></svg> Your favourites live on one device only</li>
+            <li><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"/></svg> Nothing to watch when the connection drops</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3 class="title-2">MK IPTV</h3>
+          <ul class="ticks yes body-3">
+            <li><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z"/></svg> Categories on one side, channels with now and next on the other</li>
+            <li><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z"/></svg> Continue Watching picks up at the exact second you stopped</li>
+            <li><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z"/></svg> Playlists, favourites and history follow you to every screen</li>
+            <li><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z"/></svg> Films and whole seasons download for offline viewing</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="wrap">
+      <p class="eyebrow caption-3">Features</p>
+      <h2 class="heading-2" style="margin-top:12px;max-width:680px">Built around the way you actually watch</h2>
+      <div class="benefits">
+        <article class="card benefit">
+          <div class="icon"><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M136,80v43.47l36.12,21.67a8,8,0,0,1-8.24,13.72l-40-24A8,8,0,0,1,120,128V80a8,8,0,0,1,16,0Zm-8-48A95.44,95.44,0,0,0,60.08,60.15C52.81,67.51,46.35,74.59,40,82V64a8,8,0,0,0-16,0v40a8,8,0,0,0,8,8H72a8,8,0,0,0,0-16H49c7.15-8.42,14.27-16.35,22.39-24.57a80,80,0,1,1,1.66,114.75,8,8,0,1,0-11,11.64A96,96,0,1,0,128,32Z"/></svg></div>
+          <h3 class="heading-5">Pick up at the exact second</h3>
+          <p class="body-3 muted">Your place is saved every 3 seconds and on every pause, so Continue Watching opens right where you left off, even after a restart. Finished episodes get a Watched mark and the next one waits as Up next.</p>
+          <div class="shot tall"><img src="assets/phone-episodes.webp" width="600" height="1333" alt="Series page with seasons, episode thumbnails and Watched badges" loading="lazy"></div>
+        </article>
+        <article class="card benefit">
+          <div class="icon"><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M88,64a8,8,0,0,1,8-8H216a8,8,0,0,1,0,16H96A8,8,0,0,1,88,64Zm128,56H96a8,8,0,0,0,0,16H216a8,8,0,0,0,0-16Zm0,64H96a8,8,0,0,0,0,16H216a8,8,0,0,0,0-16ZM56,56H40a8,8,0,0,0,0,16H56a8,8,0,0,0,0-16Zm0,64H40a8,8,0,0,0,0,16H56a8,8,0,0,0,0-16Zm0,64H40a8,8,0,0,0,0,16H56a8,8,0,0,0,0-16Z"/></svg></div>
+          <h3 class="heading-5">Live TV you can find your way around</h3>
+          <p class="body-3 muted">Categories on the left, channels on the right with what is on now and next, and a live preview beside them. Favourite a channel once and it is one press away on every device.</p>
+          <div class="shot"><img src="assets/mac-live.webp" width="1440" height="900" alt="Live TV with categories, a channel list and a live preview of Al Quran Al Kareem TV" loading="lazy"></div>
+        </article>
+        <article class="card benefit">
+          <div class="icon"><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M224,144v64a8,8,0,0,1-8,8H40a8,8,0,0,1-8-8V144a8,8,0,0,1,16,0v56H208V144a8,8,0,0,1,16,0Zm-101.66,5.66a8,8,0,0,0,11.32,0l40-40a8,8,0,0,0-11.32-11.32L136,124.69V32a8,8,0,0,0-16,0v92.69L93.66,98.34a8,8,0,0,0-11.32,11.32Z"/></svg></div>
+          <h3 class="heading-5">Whole seasons, offline</h3>
+          <p class="body-3 muted">Download a film or every episode of a season and watch on a plane or in the car with no connection. Downloads keep going in the background and show their size and progress.</p>
+          <div class="shot tall"><img src="assets/phone-downloads.webp" width="600" height="1333" alt="Downloads page listing films and series with sizes and offline status" loading="lazy"></div>
+        </article>
+        <article class="card benefit">
+          <div class="icon"><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M224,72H208V64a24,24,0,0,0-24-24H40A24,24,0,0,0,16,64v96a24,24,0,0,0,24,24H152v8a24,24,0,0,0,24,24h48a24,24,0,0,0,24-24V96A24,24,0,0,0,224,72ZM40,168a8,8,0,0,1-8-8V64a8,8,0,0,1,8-8H184a8,8,0,0,1,8,8v8H176a24,24,0,0,0-24,24v72Zm192,24a8,8,0,0,1-8,8H176a8,8,0,0,1-8-8V96a8,8,0,0,1,8-8h48a8,8,0,0,1,8,8Zm-96,16a8,8,0,0,1-8,8H88a8,8,0,0,1,0-16h40A8,8,0,0,1,136,208Zm80-96a8,8,0,0,1-8,8H192a8,8,0,0,1,0-16h16A8,8,0,0,1,216,112Z"/></svg></div>
+          <h3 class="heading-5">One library on every screen</h3>
+          <p class="body-3 muted">Sign in with Apple or Google, or link a device with an 8 character code. Playlists, profiles, favourites and watch history stay the same on your phone, tablet, Mac and TV.</p>
+          <div class="shot"><img src="assets/tv-movies.webp" width="1440" height="810" alt="MK IPTV on Google TV with a side menu and a Movies page" loading="lazy"></div>
+        </article>
+      </div>
+      <ul class="extras title-4" aria-label="Also included">
+        <li><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M232,56V200a16,16,0,0,1-16,16H144a8,8,0,0,1,0-16h72V56H40V96a8,8,0,0,1-16,0V56A16,16,0,0,1,40,40H216A16,16,0,0,1,232,56ZM32,184a8,8,0,0,0,0,16,8,8,0,0,1,8,8,8,8,0,0,0,16,0A24,24,0,0,0,32,184Zm0-32a8,8,0,0,0,0,16,40,40,0,0,1,40,40,8,8,0,0,0,16,0A56.06,56.06,0,0,0,32,152Zm0-32a8,8,0,0,0,0,16,72.08,72.08,0,0,1,72,72,8,8,0,0,0,16,0A88.1,88.1,0,0,0,32,120Z"/></svg> Chromecast and AirPlay</li>
+        <li><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm48.24-94.78-64-40A8,8,0,0,0,100,88v80a8,8,0,0,0,12.24,6.78l64-40a8,8,0,0,0,0-13.56ZM116,153.57V102.43L156.91,128Z"/></svg> Picture in Picture</li>
+        <li><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40ZM40,88h80v80H40Zm96-16V56h32V72Zm-16,0H88V56h32Zm0,112v16H88V184Zm16,0h32v16H136Zm0-16V88h80v80Zm80-96H184V56h32ZM72,56V72H40V56ZM40,184H72v16H40Zm176,16H184V184h32v16Z"/></svg> Profiles with a Kids mode</li>
+        <li><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M216,64H147.31l34.35-34.34a8,8,0,1,0-11.32-11.32L128,60.69,85.66,18.34A8,8,0,0,0,74.34,29.66L108.69,64H40A16,16,0,0,0,24,80V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V80A16,16,0,0,0,216,64Zm0,136H40V80H216V200Z"/></svg> A remote friendly Google TV and Apple TV app</li>
+      </ul>
+    </div>
+  </section>
+
+  <div class="tagline">
+    <div class="wrap">
+      <p class="heading-2" id="tagline">Start a film on the sofa, finish it in bed. MK IPTV remembers your place on every screen.</p>
+    </div>
+  </div>
+
+  <section id="screens">
+    <div class="wrap">
+      <p class="eyebrow caption-3">Screens</p>
+      <h2 class="heading-2" style="margin-top:12px;max-width:680px">Made for the remote, the trackpad and your thumb</h2>
+      <div class="screens">
+        <figure>
+          <div class="frame"><img src="assets/tv-movies.webp" width="1440" height="810" alt="Google TV interface with a menu on the left and rows of films" loading="lazy"></div>
+          <figcaption class="caption-4 muted">Google TV and Apple TV: a ten foot interface built for the remote.</figcaption>
+        </figure>
+        <div class="stack">
+          <figure>
+            <div class="frame"><img src="assets/phone-live.webp" width="600" height="1333" alt="Phone Live TV screen with a channel list and now and next information" loading="lazy" style="max-height:420px;width:100%;object-fit:cover;object-position:top"></div>
+            <figcaption class="caption-4 muted">Phones and tablets, including foldables and split screen.</figcaption>
+          </figure>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="wrap">
+      <p class="eyebrow caption-3">How it works</p>
+      <h2 class="heading-2" style="margin-top:12px;max-width:680px">Watching in three steps</h2>
+      <ol class="steps">
+        <li class="card"><h3 class="title-2">Install MK IPTV</h3><p class="body-3 muted">On any of your screens. The demo playlist opens straight away, so you can look around first.</p></li>
+        <li class="card"><h3 class="title-2">Add your playlist</h3><p class="body-3 muted">Enter the server address, username and password from your IPTV provider. Your library loads in seconds and stays cached.</p></li>
+        <li class="card"><h3 class="title-2">Link your other screens</h3><p class="body-3 muted">Sign in with Apple or Google, or type an 8 character code on the TV. Everything appears there too.</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="privacy">
+    <div class="wrap">
+      <p class="eyebrow caption-3">Privacy</p>
+      <h2 class="heading-2" style="margin-top:12px;max-width:680px">Your logins stay yours</h2>
+      <div class="facts">
+        <div class="fact card"><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M128,112a28,28,0,0,0-8,54.83V184a8,8,0,0,0,16,0V166.83A28,28,0,0,0,128,112Zm0,40a12,12,0,1,1,12-12A12,12,0,0,1,128,152Zm80-72H176V56a48,48,0,0,0-96,0V80H48A16,16,0,0,0,32,96V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V96A16,16,0,0,0,208,80ZM96,56a32,32,0,0,1,64,0V80H96ZM208,208H48V96H208V208Z"/></svg><h3 class="title-2">Encrypted on the device</h3><p class="body-3 muted">Playlist passwords live in the iOS Keychain or the Android Keystore, never in a plain file.</p></div>
+        <div class="fact card"><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M208,40H48A16,16,0,0,0,32,56v56c0,52.72,25.52,84.67,46.93,102.19,23.06,18.86,46,25.26,47,25.53a8,8,0,0,0,4.2,0c1-.27,23.91-6.67,47-25.53C198.48,196.67,224,164.72,224,112V56A16,16,0,0,0,208,40Zm0,72c0,37.07-13.66,67.16-40.6,89.42A129.3,129.3,0,0,1,128,223.62a128.25,128.25,0,0,1-38.92-21.81C61.82,179.51,48,149.3,48,112l0-56,160,0ZM82.34,141.66a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35a8,8,0,0,1,11.32,11.32l-56,56a8,8,0,0,1-11.32,0Z"/></svg><h3 class="title-2">Sealed before they sync</h3><p class="body-3 muted">With sync on, passwords are encrypted end to end on your device first. The cloud only ever stores ciphertext.</p></div>
+        <div class="fact card"><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"/></svg><h3 class="title-2">No ads, no tracking</h3><p class="body-3 muted">No analytics and no advertising. Delete your synced data from Settings at any time.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq">
+    <div class="wrap">
+      <p class="eyebrow caption-3" style="text-align:center">FAQ</p>
+      <h2 class="heading-2" style="margin-top:12px;text-align:center">Questions people ask first</h2>
+      <div class="faq">
+        <details><summary class="title-2"><span>Does MK IPTV include channels or films?</span><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z"/></svg></summary><p class="answer body-3 muted">No. MK IPTV is a player. It plays the subscription you already have from your IPTV provider, using the Xtream Codes login they gave you.</p></details>
+        <details><summary class="title-2"><span>What do I need to get started?</span><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z"/></svg></summary><p class="answer body-3 muted">Your provider's server address, username and password. Most providers send these when you subscribe. Until then the built in demo playlist lets you try every feature.</p></details>
+        <details><summary class="title-2"><span>Which devices does it run on?</span><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z"/></svg></summary><p class="answer body-3 muted">iPhone and iPad from the App Store, Android phones, tablets and Google TV as an app download, and native Mac and Apple TV versions that are currently in App Store review.</p></details>
+        <details><summary class="title-2"><span>Do I need an account to sync?</span><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z"/></svg></summary><p class="answer body-3 muted">No. You can sign in with Apple or Google, or skip accounts and link devices with a one time 8 character code. Sync is off until you turn it on.</p></details>
+        <details><summary class="title-2"><span>Is my provider password safe?</span><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z"/></svg></summary><p class="answer body-3 muted">It is stored in the iOS Keychain or the Android Keystore. When you sync, it is encrypted on your device before upload, so the cloud copy can't be read.</p></details>
+        <details><summary class="title-2"><span>Can I watch without internet?</span><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z"/></svg></summary><p class="answer body-3 muted">Yes, for anything you download. Films and whole seasons download in the background and play offline. Live TV needs a connection.</p></details>
+        <details><summary class="title-2"><span>Can I watch on my TV from my phone?</span><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z"/></svg></summary><p class="answer body-3 muted">Yes. Cast to Chromecast and Google TV, or use AirPlay to an Apple TV or AirPlay TV, straight from the player.</p></details>
+        <details><summary class="title-2"><span>Why won't some files play on iPhone?</span><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z"/></svg></summary><p class="answer body-3 muted">Apple's player can't open MKV and AVI files. Those titles play in the Android and Google TV apps, or you can cast them to a TV.</p></details>
+      </div>
+    </div>
+  </section>
+
+  <section id="get" class="get">
+    <div class="wrap">
+      <h2 class="heading-2" style="max-width:680px;margin:0 auto">Get MK IPTV</h2>
+      <p class="body-3 muted" style="max-width:680px;margin:16px auto 0">No account needed. Try the demo playlist first, then add your own.</p>
+      <div class="opts">
+        <div class="card opt">
+          <div class="plat title-2"><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M223.3,169.59a8.07,8.07,0,0,0-2.8-3.4C203.53,154.53,200,134.64,200,120c0-17.67,13.47-33.06,21.5-40.67a8,8,0,0,0,0-11.62C208.82,55.74,187.82,48,168,48a72.2,72.2,0,0,0-40,12.13,71.56,71.56,0,0,0-90.71,9.09A74.63,74.63,0,0,0,16,123.4a127.06,127.06,0,0,0,40.14,89.73A39.8,39.8,0,0,0,83.59,224h87.68a39.84,39.84,0,0,0,29.12-12.57,125,125,0,0,0,17.82-24.6C225.23,174,224.33,172,223.3,169.59Zm-34.63,30.94a23.76,23.76,0,0,1-17.4,7.47H83.59a23.82,23.82,0,0,1-16.44-6.51A111.14,111.14,0,0,1,32,123,58.5,58.5,0,0,1,48.65,80.47,54.81,54.81,0,0,1,88,64h.78A55.45,55.45,0,0,1,123,76.28a8,8,0,0,0,10,0A55.44,55.44,0,0,1,168,64a70.64,70.64,0,0,1,36,10.35c-13,14.52-20,30.47-20,45.65,0,23.77,7.64,42.73,22.18,55.3A105.82,105.82,0,0,1,188.67,200.53ZM128.23,30A40,40,0,0,1,167,0h1a8,8,0,0,1,0,16h-1a24,24,0,0,0-23.24,18,8,8,0,1,1-15.5-4Z"/></svg> iPhone and iPad</div>
+          <span class="status live caption-4 muted">On the App Store</span>
+          <p class="body-6 muted">iOS and iPadOS 17 or later.</p>
+          <a class="btn btn-primary button-md" href="https://apps.apple.com/app/id6836639475" target="_blank" rel="noopener">Get it on the App Store <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M221.66,133.66l-72,72a8,8,0,0,1-11.32-11.32L196.69,136H40a8,8,0,0,1,0-16H196.69L138.34,61.66a8,8,0,0,1,11.32-11.32l72,72A8,8,0,0,1,221.66,133.66Z"/></svg></a>
+        </div>
+        <div class="card opt">
+          <div class="plat title-2"><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M176,148a12,12,0,1,1-12-12A12,12,0,0,1,176,148ZM92,136a12,12,0,1,0,12,12A12,12,0,0,0,92,136Zm148,24v24a16,16,0,0,1-16,16H32a16,16,0,0,1-16-16V161.13A113.38,113.38,0,0,1,51.4,78.72L26.34,53.66A8,8,0,0,1,37.66,42.34L63.82,68.5a111.43,111.43,0,0,1,128.55-.19l26-26a8,8,0,0,1,11.32,11.32L204.82,78.5c.75.71,1.5,1.43,2.24,2.17A111.25,111.25,0,0,1,240,160Zm-16,0a96,96,0,0,0-96-96h-.34C74.91,64.18,32,107.75,32,161.13V184H224Z"/></svg> Android and Google TV</div>
+          <span class="status live caption-4 muted">Direct download</span>
+          <p class="body-6 muted">Phones, tablets and TVs on Android 7 or later. Updates install from inside the app. Google Play is in testing.</p>
+          <a class="btn btn-primary button-md" href="https://github.com/Mkuz1/MK-IPTV/releases/latest" target="_blank" rel="noopener">Download for Android <svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M224,144v64a8,8,0,0,1-8,8H40a8,8,0,0,1-8-8V144a8,8,0,0,1,16,0v56H208V144a8,8,0,0,1,16,0Zm-101.66,5.66a8,8,0,0,0,11.32,0l40-40a8,8,0,0,0-11.32-11.32L136,124.69V32a8,8,0,0,0-16,0v92.69L93.66,98.34a8,8,0,0,0-11.32,11.32Z"/></svg></a>
+        </div>
+        <div class="card opt">
+          <div class="plat title-2"><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true"><path d="M216,64H147.31l34.35-34.34a8,8,0,1,0-11.32-11.32L128,60.69,85.66,18.34A8,8,0,0,0,74.34,29.66L108.69,64H40A16,16,0,0,0,24,80V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V80A16,16,0,0,0,216,64Zm0,136H40V80H216V200Z"/></svg> Mac and Apple TV</div>
+          <span class="status caption-4 muted">In App Store review</span>
+          <p class="body-6 muted">Native apps for Mac and Apple TV with the same library and sync.</p>
+          <a class="btn btn-ghost button-md" aria-disabled="true" tabindex="-1">Coming soon</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap row">
+    <a class="brand title-3" href="#top"><img src="assets/icon-192.png" alt="">MK IPTV</a>
+    <nav aria-label="Footer">
+      <ul class="body-6">
+        <li><a href="https://github.com/Mkuz1/MK-IPTV/blob/claude/upbeat-allen-sin4my/docs/PRIVACY.md" target="_blank" rel="noopener">Privacy policy</a></li>
+        <li><a href="https://github.com/Mkuz1/MK-IPTV/releases" target="_blank" rel="noopener">Release notes</a></li>
+        <li class="muted">Support: <span class="mail">mohamad@koussa.org</span></li>
+      </ul>
+    </nav>
+    <p class="caption-5 muted">© 2026 MK IPTV. MK IPTV provides no content of its own.</p>
+  </div>
+</footer>
+
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Does MK IPTV include channels or films?", "acceptedAnswer": {"@type": "Answer", "text": "No. MK IPTV is a player. It plays the subscription you already have from your IPTV provider, using the Xtream Codes login they gave you."}}, {"@type": "Question", "name": "What do I need to get started?", "acceptedAnswer": {"@type": "Answer", "text": "Your provider's server address, username and password. Most providers send these when you subscribe. Until then the built in demo playlist lets you try every feature."}}, {"@type": "Question", "name": "Which devices does it run on?", "acceptedAnswer": {"@type": "Answer", "text": "iPhone and iPad from the App Store, Android phones, tablets and Google TV as an app download, and native Mac and Apple TV versions that are currently in App Store review."}}, {"@type": "Question", "name": "Do I need an account to sync?", "acceptedAnswer": {"@type": "Answer", "text": "No. You can sign in with Apple or Google, or skip accounts and link devices with a one time 8 character code. Sync is off until you turn it on."}}, {"@type": "Question", "name": "Is my provider password safe?", "acceptedAnswer": {"@type": "Answer", "text": "It is stored in the iOS Keychain or the Android Keystore. When you sync, it is encrypted on your device before upload, so the cloud copy can't be read."}}, {"@type": "Question", "name": "Can I watch without internet?", "acceptedAnswer": {"@type": "Answer", "text": "Yes, for anything you download. Films and whole seasons download in the background and play offline. Live TV needs a connection."}}, {"@type": "Question", "name": "Can I watch on my TV from my phone?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. Cast to Chromecast and Google TV, or use AirPlay to an Apple TV or AirPlay TV, straight from the player."}}, {"@type": "Question", "name": "Why won't some files play on iPhone?", "acceptedAnswer": {"@type": "Answer", "text": "Apple's player can't open MKV and AVI files. Those titles play in the Android and Google TV apps, or you can cast them to a TV."}}]}</script>
+<script>
+(() => {
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // Mobile menu: full height panel, links rise in one after another (60 ms apart, 400 ms cap).
+  const btn = document.querySelector(".menu-btn");
+  const links = [...document.querySelectorAll(".panel a")];
+  links.forEach((a, i) => a.style.transitionDelay = Math.min(i * 60, 400) + "ms");
+  const setMenu = (open) => {
+    document.body.classList.toggle("menu-open", open);
+    btn.setAttribute("aria-expanded", String(open));
+    btn.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+  };
+  btn.addEventListener("click", () => setMenu(!document.body.classList.contains("menu-open")));
+  links.forEach(a => a.addEventListener("click", () => setMenu(false)));
+  addEventListener("keydown", e => { if (e.key === "Escape") setMenu(false); });
+
+  // Current section in the nav.
+  const navLinks = [...document.querySelectorAll(".nav-links a")];
+  const spy = new IntersectionObserver(entries => entries.forEach(en => {
+    if (!en.isIntersecting) return;
+    navLinks.forEach(a => a.setAttribute("aria-current", String(a.getAttribute("href") === "#" + en.target.id)));
+  }), { rootMargin: "-45% 0px -50% 0px" });
+  ["features", "screens", "how", "faq"].forEach(id => spy.observe(document.getElementById(id)));
+
+  // Scroll reveals: only sections that start below the first screen, revealed once.
+  if (!reduce && "IntersectionObserver" in window) {
+    const later = [...document.querySelectorAll("main section, .platforms")].filter(el => el.getBoundingClientRect().top > innerHeight);
+    later.forEach(el => el.classList.add("reveal", "pre"));
+    const io = new IntersectionObserver(entries => entries.forEach(en => {
+      if (en.isIntersecting) { en.target.classList.remove("pre"); io.unobserve(en.target); }
+    }), { rootMargin: "0px 0px -10% 0px" });
+    later.forEach(el => io.observe(el));
+  }
+
+  // Tagline: each word lights up as it crosses a line 60% down the screen (one rAF throttled listener).
+  const tag = document.getElementById("tagline");
+  tag.innerHTML = tag.textContent.trim().split(/\s+/).map(w => `<span class="w">${w}</span> `).join("");
+  const words = [...tag.querySelectorAll(".w")];
+  if (reduce) { words.forEach(w => w.classList.add("on")); return; }
+  let ticking = false;
+  const update = () => {
+    ticking = false;
+    const line = innerHeight * 0.6;
+    const r = tag.getBoundingClientRect();
+    const progress = Math.min(Math.max((line - r.top) / Math.max(r.height, 1), 0), 1);
+    const lit = Math.round(progress * words.length);
+    words.forEach((w, i) => w.classList.toggle("on", i < lit));
+  };
+  addEventListener("scroll", () => { if (!ticking) { ticking = true; requestAnimationFrame(update); } }, { passive: true });
+  update();
+})();
+</script>
