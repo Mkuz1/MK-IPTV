@@ -19,3 +19,4 @@ ios/Payload/
 app/google-services.json
 ios/MKIPTV/GoogleService-Info.plist
 ios/MKIPTV/Info.plist
+site/dist/
