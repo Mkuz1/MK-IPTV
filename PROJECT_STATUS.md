@@ -19,6 +19,7 @@ IPTV player for the user's own Xtream Codes playlists, streaming-style UI, liqui
 
 ## Recent changes
 
+- 2026-11-27: **Website security headers** (MK Apps security review): CSP, HSTS, X-Frame-Options DENY, nosniff, Referrer-Policy and Permissions-Policy for every page, in `site/build.py`. The CSP lists exactly the hosts the site uses (Google Fonts, GitHub API, Cloudflare Web Analytics); if you add a new script, font, embed or API host, add it to the CSP or it will be blocked.
 - 2026-11-26: Site shows the live Apple TV App Store badge (PR #2); koussa.net invite (PR #1); SEO/share previews (PR #3); site moved to Cloudflare Pages with auto-deploy.
 - 2026-11-25: Android 1.7.9, Google TV player keeps remote focus on the controls.
 - 2026-11-24: iPhone background audio fix for App Review 2.5.4; Apple TV and Mac App Store screenshots; ASC tooling.

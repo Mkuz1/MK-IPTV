@@ -39,7 +39,9 @@ import shutil
 shutil.copytree(os.path.join(here, "assets"), os.path.join(dist, "assets"), dirs_exist_ok=True)
 for f in ("favicon.ico", "site.webmanifest"):  # served from the site root
     shutil.copy(os.path.join(here, "assets", f), os.path.join(dist, f))
-open(os.path.join(dist, "_headers"), "w").write("/assets/*\n  Cache-Control: public, max-age=604800\n/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n")
+# Security headers (CSP lists every script, font and API host the page uses) + image caching.
+HEADERS = "/*\n  Strict-Transport-Security: max-age=31536000; includeSubDomains\n  X-Content-Type-Options: nosniff\n  X-Frame-Options: DENY\n  Referrer-Policy: strict-origin-when-cross-origin\n  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()\n  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' data: blob:; connect-src 'self' https://api.github.com https://cloudflareinsights.com; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests\n\n/assets/*\n  Cache-Control: public, max-age=604800\n"
+open(os.path.join(dist, '_headers'), 'w').write(HEADERS)
 open(os.path.join(dist, "robots.txt"), "w").write(f"User-agent: *\nAllow: /\nSitemap: {SITE}/sitemap.xml\n")
 open(os.path.join(dist, "sitemap.xml"), "w").write(f'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>{SITE}/</loc><lastmod>2026-11-26</lastmod></url></urlset>\n')
 print("site/dist ready:", sorted(os.listdir(dist)))
